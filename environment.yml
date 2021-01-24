@@ -1,0 +1,10 @@
+name: expression-store
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - conda-forge::python=3.7.3
+  - conda-forge::dask
+  - conda-forge::click
+  - conda-forge::progressbar
+  - bioconda::pyranges
