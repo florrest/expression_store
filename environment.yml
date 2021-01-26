@@ -7,4 +7,5 @@ dependencies:
   - conda-forge::dask
   - conda-forge::click
   - conda-forge::progressbar
+  - conda-forge::requests
   - bioconda::pyranges
