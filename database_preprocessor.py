@@ -31,13 +31,19 @@ logger.setLevel(logging.INFO)
 @click.option('-i', '--inpath', prompt='path to nf-core/rna-seq base folder', help='input path', required=True)
 def main(inpath):
     start = time.time()
-    logger.info('Filter Projects and download metadata from ICGC DCC')
-    download_icgc_project_metadata(get_icgc_project_list(inpath), inpath)
-    gunzip_files(os.path.join(inpath, "metadata/icgc"))
-    icgc_meta_df = join_icgc_meta(concat_icgc_meta(os.path.join(inpath, "metadata/icgc")), inpath)
 
-    logger.info('Download Metadata from Sequence Read Archive (SRA)')
-    download_sra_metadata(get_sra_accession_list(inpath), inpath)
+    if os.path.isfile(os.path.join(inpath + '/manifest.tsv')):
+        logger.info('Filter Projects and download metadata from ICGC DCC')
+        download_icgc_project_metadata(get_icgc_project_list(inpath), inpath)
+        gunzip_files(os.path.join(inpath, "metadata/icgc"))
+    else:
+        logger.info("No ICGC DCC manifest file provided. SKIPPING")
+
+    if os.path.isfile(os.path.join(inpath + '/acc_list.txt')):
+        logger.info('Download Metadata from Sequence Read Archive (SRA)')
+        download_sra_metadata(get_sra_accession_list(inpath), inpath)
+    else:
+        logger.info("No SRA accession list provided. SKIPPING")
 
     # logger.info('Download Metadata from GDC')
     # gdc_uuid_list = get_gdc_uuid_list(inpath)
@@ -83,6 +89,7 @@ def extract_run_id(string):
     else:
         return string
 
+
 # extract substring from a given string if it matches a pattern otherwise return original string
 def extract_sample_id(string):
     if string.startswith('SRR'):
@@ -96,6 +103,7 @@ def extract_sample_id(string):
             "",
             string)
     return string
+
 
 #
 # Get identifiers and codes for downloaded sequence data
@@ -183,6 +191,7 @@ def download_icgc_project_metadata(project_lst, inpath):
         retrieve_data(donor_set_url, inpath + '/metadata/icgc/repository_' + str(i) + '.tsv')
         time.sleep(0.01)
 
+
 ### UNDER CONSTRUCTION
 def download_gdc_metadata(id_lst, inpath):
     if not os.path.exists(os.path.join(inpath, 'metadata/gdc/')):
@@ -190,6 +199,7 @@ def download_gdc_metadata(id_lst, inpath):
     for i in id_lst:
         url = 'https://api.gdc.cancer.gov/cases/' + str(i) + '?fields=submitter_id?pretty=true&format=TSV'
         retrieve_data(url, inpath + '/test/' + str(i) + '_sample.tsv')
+
 
 ### UNDER CONSTRUCTION
 def download_gdc_metadata_test():
@@ -267,6 +277,7 @@ def download_hgnc(inpath):
                           usecols=['hgnc_id', 'symbol', 'locus_group', 'locus_type', 'gene_family'])
     return hgnc_df
 
+
 #
 # Preparing data
 #
@@ -304,32 +315,39 @@ def concat_icgc_meta(inpath_icgc_meta):
         elif "repository" in file:
             df = pd.read_csv(file, sep='\t')
             icgc_repository.append(df)
-    donor_frame = pd.concat(icgc_donor, axis=0)
-    sample_frame = pd.concat(icgc_sample, axis=0)
-    specimen_frame = pd.concat(icgc_specimen, axis=0)
-    repository_frame = pd.concat(icgc_repository, axis=0)
-
-    return donor_frame, sample_frame, specimen_frame, repository_frame
+    if len(icgc_donor) > 0:
+        donor_frame = pd.concat(icgc_donor, axis=0)
+        sample_frame = pd.concat(icgc_sample, axis=0)
+        specimen_frame = pd.concat(icgc_specimen, axis=0)
+        repository_frame = pd.concat(icgc_repository, axis=0)
+        return donor_frame, sample_frame, specimen_frame, repository_frame
+    else:
+        return icgc_donor, icgc_sample, icgc_specimen, icgc_repository
 
 
 # join and return dataframes containing metadata about ICGC DCC sequences
 def join_icgc_meta(df, base_path):
-    donor_df = df[0]
-    sample_df = df[1]
-    specimen_df = df[2]
-    repository_df = df[3].rename(columns=icgc_col_names_repository)
+    try:
+        donor_df = df[0]
+        sample_df = df[1]
+        specimen_df = df[2]
+        repository_df = df[3].rename(columns=icgc_col_names_repository)
+        manifest_df = pd.read_csv(os.path.join(base_path, './manifest.tsv'),
+                                  sep='\t', usecols=['file_id', 'file_name'])
 
-    manifest_df = pd.read_csv(os.path.join(base_path, './manifest.tsv'),
-                              sep='\t', usecols=['file_id', 'file_name'])
-
-    merge_rep_man = pd.merge(repository_df, manifest_df,
-                             on=['file_id', 'file_name'],
-                             how='right')
-    merge_rep_man['file_name'] = merge_rep_man['file_name'].apply(lambda x: extract_run_id(x))
-    sample_df = pd.merge(sample_df, specimen_df,
-                         on=['icgc_specimen_id', 'icgc_donor_id', 'project_code', 'submitted_donor_id',
-                             'submitted_specimen_id', 'percentage_cellularity', 'level_of_cellularity'],
-                         how='left')
+        merge_rep_man = pd.merge(repository_df, manifest_df,
+                                 on=['file_id', 'file_name'],
+                                 how='right')
+        merge_rep_man['file_name'] = merge_rep_man['file_name'].apply(lambda x: extract_run_id(x))
+        sample_df = pd.merge(sample_df, specimen_df,
+                             on=['icgc_specimen_id', 'icgc_donor_id', 'project_code', 'submitted_donor_id',
+                                 'submitted_specimen_id', 'percentage_cellularity', 'level_of_cellularity'],
+                             how='left')
+    except:
+        logger.info('No ICGC DCC Manifest provided')
+        merge_rep_man = pd.DataFrame(columns=rep_man_cols)
+        donor_df = pd.DataFrame(columns=donor_df_cols)
+        sample_df = pd.DataFrame(columns=sample_df_cols)
 
     return merge_rep_man, donor_df, sample_df
 
@@ -387,7 +405,10 @@ def create_expression_table(expression_df):
 
 
 def create_project_layer_tables(sra_meta_df, icgc_meta_df):
-    sra = sra_meta_df.rename(columns=database_columns)
+    try:
+        sra = sra_meta_df.rename(columns=database_columns)
+    except:
+        sra = pd.DataFrame(columns=sra_df_cols)
     rep_man = icgc_meta_df[0].rename(columns=database_columns)
     donor = icgc_meta_df[1].rename(columns=database_columns)
     sample = icgc_meta_df[2].rename(columns=database_columns)
@@ -432,7 +453,10 @@ def create_project_layer_tables(sra_meta_df, icgc_meta_df):
 
     countinfo_db = concat_meta[['library_name', 'library_strategy', 'library_selection',
                                 'library_source', 'library_layout']]
-
+    project_db.to_csv('project.csv', sep=',')
+    sample_db.to_csv('sample.csv', sep=',')
+    donor_db.to_csv('donor.csv', sep=',')
+    countinfo_db.to_csv('countinfo.csv', sep=',')
     return project_db, donor_db, sample_db, countinfo_db
 
 
@@ -500,5 +524,33 @@ icgc_tissue_dict = {
     'MALY-DE': 'Blood',
     'PACA-CA': 'Pancreas'
 }
+
+# Database columns
+rep_man_cols = ['access', 'file_id', 'object_id', 'file_name', 'icgc_donor_id', 'icgc_specimen_id', 'specimen_type',
+                'icgc_sample_id', 'repository', 'project_code', 'Study', 'data_type', 'experiemntal_strategy', 'format',
+                'size_bytes']
+donor_df_cols = ['icgc_donor_id', 'project_code', 'study_donor_involved_in', 'submitted_donor_id', 'donor_sex',
+                 'donor_vital_status', 'disease_status_last_followup', 'donor_relapse_type',
+                 'donor_age_at_diagnosis', 'donor_age_at_enrollment', 'donor_age_at_last_followup',
+                 'donor_relapse_interval', 'donor_diagnosis_icd10', 'donor_tumour_staging_system_at_diagnosis',
+                 'donor_tumour_stage_at_diagnosis', 'donor_tumour_stage_at_diagnosis_supplemental',
+                 'donor_survival_time', 'donor_interval_of_last_followup', 'prior_malignancy',
+                 'cancer_type_prior_malignancy', 'cancer_history_first_degree_relative']
+sample_df_cols = ['icgc_sample_id', 'project_code', 'submitted_sample_id', 'icgc_specimen_id', 'submitted_specimen_id',
+                  'icgc_donor_id', 'submitted_donor_id', 'analyzed_sample_interval', 'percentage_cellularity',
+                  'level_of_cellularity', 'study', 'study_specimen_involved_in', 'specimen_type', 'specimen_type_other',
+                  'specimen_interval', 'specimen_donor_treatment_type', 'specimen_donor_treatment_type_other',
+                  'specimen_processing', 'specimen_processing_other', 'specimen_storage', 'specimen_storage_other',
+                  'tumour_confirmed', 'specimen_biobank', 'specimen_biobank_id', 'specimen_available',
+                  'tumour_histological_type', 'tumour_grading_system', 'tumour_grade', 'tumour_grade_supplemental',
+                  'tumour_stage_system', 'tumour_stage', 'tumour_stage_supplemental',
+                  'digital_image_of_stained_section']
+sra_df_cols = ['run', 'release_date', 'load_date', 'spots', 'bases', 'spots_with_mates', 'avg_length', 'size_MB',
+               'assembly_name', 'download_path', 'experiment', 'library_name', 'library_strategy', 'library_selection',
+               'library_source', 'library_layout', 'insert_size', 'insert_dev', 'plattform', 'model', 'sra_study',
+               'project_code', 'study_pubmed_id', 'project_id', 'sample', 'sample_id', 'sample_type', 'TaxID',
+               'ScientificName', 'sample_name', 'g1k_pop_code', 'source', 'g1k_analysis_group', 'subject_id',
+               'donor_sex', 'disease', 'tumour', 'affection_status', 'analyte_type', 'histological_type',
+               'body_site', 'center_name', 'submission', 'dbgap_study_accession', 'consent', 'run_hash', 'read_hash']
 if __name__ == "__main__":
     sys.exit(main())
