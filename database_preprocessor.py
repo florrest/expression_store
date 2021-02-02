@@ -180,6 +180,7 @@ def download_sra_metadata(project_lst, metadata_dest):
     if not os.path.exists(os.path.join(metadata_dest, 'sra/')):
         os.makedirs(os.path.join(metadata_dest, 'sra/'))
     else:
+        # Check if SRA CSV files have already been downloaded, and if so, skip download
         downloaded_files = [os.path.basename(x).split('.')[0] for x in glob.glob(os.path.join(metadata_dest, 'sra/', '*.csv'))]
         project_lst = [file for file in project_lst if file not in downloaded_files]
     for i in project_lst:
@@ -203,13 +204,32 @@ def download_icgc_project_metadata(project_lst, metadata_dest):
                         'filters=%7B%22file%22%3A%7B%22projectCode%22%3A%7B%22is%22%3A%5B%22{}%22%5D%7D%7D%7D&' \
                         'type=tsv'.format(i)
         time.sleep(0.01)
-        retrieve_data(sample_url, metadata_dest + '/icgc/sample_' + str(i) + '.tsv.gz')
+        if os.path.isfile(os.path.join(metadata_dest, 'icgc/sample_' + str(i) + '.tsv.gz'))\
+                or os.path.isfile(os.path.join(metadata_dest, 'icgc/sample_' + str(i) + '.tsv')):
+            logger.info("sample metadata for {} already exists".format(i))
+        else:
+            retrieve_data(sample_url, metadata_dest + '/icgc/sample_' + str(i) + '.tsv.gz')
+
         time.sleep(0.01)
-        retrieve_data(donor_url, metadata_dest + '/icgc/donor_' + str(i) + '.tsv.gz')
+        if os.path.isfile(os.path.join(metadata_dest, 'icgc/donor_' + str(i) + '.tsv.gz'))\
+                or os.path.isfile(os.path.join(metadata_dest, 'icgc/donor_' + str(i) + '.tsv')):
+            logger.info("donor metadata for {} already exists".format(i))
+        else:
+            retrieve_data(donor_url, metadata_dest + '/icgc/donor_' + str(i) + '.tsv.gz')
+
         time.sleep(0.01)
-        retrieve_data(specimen_url, metadata_dest + '/icgc/specimen_' + str(i) + '.tsv.gz')
+        if os.path.isfile(os.path.join(metadata_dest, 'icgc/specimen_' + str(i) + '.tsv.gz'))\
+                or os.path.isfile(os.path.join(metadata_dest, 'icgc/specimen_' + str(i) + '.tsv')):
+            logger.info("specimen metadata for {} already exists".format(i))
+        else:
+            retrieve_data(specimen_url, metadata_dest + '/icgc/specimen_' + str(i) + '.tsv.gz')
+
         time.sleep(0.01)
-        retrieve_data(donor_set_url, metadata_dest + '/icgc/repository_' + str(i) + '.tsv')
+        if os.path.isfile(os.path.join(metadata_dest, 'icgc/repository_' + str(i) + '.tsv')):
+            logger.info("repository metadata for {} already exists".format(i))
+        else:
+            retrieve_data(donor_set_url, metadata_dest + '/icgc/repository_' + str(i) + '.tsv')
+
         time.sleep(0.01)
 
 
