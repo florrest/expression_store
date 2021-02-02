@@ -32,21 +32,33 @@ logger.setLevel(logging.INFO)
 
 
 @click.command()
-@click.option('-i', '--inpath', prompt='path to nf-core/rna-seq base folder', help='input path', required=True)
-def main(inpath):
+@click.option('--rnaseq',
+              prompt='path to nf-core/rna-seq base folder',
+              help='input path', required=True)
+@click.option('--sra_file',
+              help='path to SRA accession list')
+@click.option('--dcc_manifest',
+              help='path to ICGC DCC manifest.tsv')
+@click.option('--metadata_dest',
+              prompt='path to download destination of metadata',
+              help='path to metadata destination')
+@click.option('--db_dest',
+              prompt='path where to store created csv files for database',
+              help='path to metadata destination')
+def main(rnaseq, sra_file, dcc_manifest, metadata_dest, db_dest):
 
     start = time.time()
 
-    if os.path.isfile(os.path.join(inpath + '/manifest.tsv')):
+    if dcc_manifest is not None:
         logger.info('Filter Projects and download metadata from ICGC DCC')
-        download_icgc_project_metadata(get_icgc_project_list(inpath), inpath)
-        gunzip_files(os.path.join(inpath, "metadata/icgc"))
+        download_icgc_project_metadata(get_icgc_project_list(dcc_manifest), metadata_dest)
+        gunzip_files(os.path.join(metadata_dest, "icgc"))
     else:
         logger.info("No ICGC DCC manifest file provided. SKIPPING")
 
-    if os.path.isfile(os.path.join(inpath + '/acc_list.txt')):
+    if sra_file is not None:
         logger.info('Download Metadata from Sequence Read Archive (SRA)')
-        download_sra_metadata(get_sra_accession_list(inpath), inpath)
+        download_sra_metadata(get_sra_accession_list(sra_file), metadata_dest)
     else:
         logger.info("No SRA accession list provided. SKIPPING")
 
@@ -55,17 +67,17 @@ def main(inpath):
     # download_gdc_metadata(gdc_uuid_list, inpath)
 
     logger.info('Creating CSV to load into database')
-    expression_df = dd.concat(stringtie_results_out(os.path.join(inpath, 'results/stringtieFPKM/')))
-    create_gene_table(download_and_process_ensembl_metadata(inpath),
-                      download_hgnc(inpath),
+    expression_df = dd.concat(stringtie_results_out(os.path.join(rnaseq, 'results/stringtieFPKM/')))
+    create_gene_table(download_and_process_ensembl_metadata(rnaseq),
+                      download_hgnc(rnaseq),
                       expression_df)
-    create_expression_table(expression_df)
-    project_db = create_project_layer_tables(concat_sra_meta(os.path.join(inpath, "metadata/sra"), get_sra_accession_list(inpath)),
-                                join_icgc_meta(concat_icgc_meta(os.path.join(inpath, "metadata/icgc")), inpath))
+    create_expression_table(expression_df, db_dest)
+    project_db = create_project_layer_tables(concat_sra_meta(os.path.join(metadata_dest, "sra"), get_sra_accession_list(sra_file)),
+                                join_icgc_meta(concat_icgc_meta(os.path.join(rnaseq, "metadata/icgc")), rnaseq), db_dest)
 
 
 
-    create_countinfo_table(project_db[3], inpath)
+    create_countinfo_table(project_db[3], rnaseq, db_dest)
     print(time.time() - start)
 #
 # HELPER FUNCTIONS
@@ -112,18 +124,17 @@ def extract_sample_id(string):
 
 
 # Wrapper function to create csv from dataframe. sep=',', index=False
-def create_csv(df, file_name):
-    df.to_csv('{}.csv'.format(file_name), sep=',', index=False)
+def create_csv(df, file_name, db_dest):
+    df.to_csv(os.path.join(db_dest, '{}.csv'.format(file_name)), sep=',', index=False)
 #
 # Get identifiers and codes for downloaded sequence data
 #
 
 # returns ICGC DCC project list from given manifest file
-def get_icgc_project_list(inpath):
+def get_icgc_project_list(dcc_manifest):
     icgc_project_codes = pd.DataFrame()
     try:
-        os.chdir(inpath)
-        icgc_project_codes = pd.read_csv('./manifest.tsv', sep='\t', usecols=['project_id/project_count'])
+        icgc_project_codes = pd.read_csv(dcc_manifest, sep='\t', usecols=['project_id/project_count'])
         icgc_project_codes = icgc_project_codes['project_id/project_count'].unique().tolist()
     except:
         print("Not a directory")
@@ -132,14 +143,12 @@ def get_icgc_project_list(inpath):
 
 
 # returns list of SRA accessions based on acc_list.txt (as used by S. Lemkes SRADownloader
-def get_sra_accession_list(inpath):
-    sra_accessions = pd.DataFrame()
+def get_sra_accession_list(path_to_txt):
     try:
-        os.chdir(inpath)
-        sra_accessions = pd.read_csv('./acc_list.txt', header=None)
+        sra_accessions = pd.read_csv(path_to_txt, header=None)
         sra_accessions = sra_accessions[0].unique().tolist()
     except:
-        print("Not a dirctory")
+        print("Not a directory")
 
     return sra_accessions
 
@@ -167,19 +176,19 @@ def get_gdc_uuid_list(inpath):
 #
 
 # download runInfo.csv for given accession
-def download_sra_metadata(project_lst, inpath):
-    if not os.path.exists(os.path.join(inpath, 'metadata/sra/')):
-        os.makedirs(os.path.join(inpath, 'metadata/sra/'))
+def download_sra_metadata(project_lst, metadata_dest):
+    if not os.path.exists(os.path.join(metadata_dest, 'sra/')):
+        os.makedirs(os.path.join(metadata_dest, 'sra/'))
     for i in project_lst:
         sra_url = 'http://trace.ncbi.nlm.nih.gov/Traces/sra/sra.cgi?save=efetch&db=sra&rettype=runinfo&term={}'.format(
             i)
-        retrieve_data(sra_url, os.path.join(inpath, 'metadata/sra/') + str(i) + '.csv')
+        retrieve_data(sra_url, os.path.join(metadata_dest, 'sra/') + str(i) + '.csv')
 
 
 # download sample, specimen, donor and donor_set metadata from ICGC DCC based on project code
-def download_icgc_project_metadata(project_lst, inpath):
-    if not os.path.exists(os.path.join(inpath, 'metadata/icgc/')):
-        os.makedirs(os.path.join(inpath, 'metadata/icgc/'))
+def download_icgc_project_metadata(project_lst, metadata_dest):
+    if not os.path.exists(os.path.join(metadata_dest, 'icgc/')):
+        os.makedirs(os.path.join(metadata_dest, 'icgc/'))
     for i in project_lst:
         sample_url = 'https://dcc.icgc.org/api/v1/download?fn=/current/Projects/' + i + '/sample' \
                                                                                         '.' + i + '.tsv.gz '
@@ -191,13 +200,13 @@ def download_icgc_project_metadata(project_lst, inpath):
                         'filters=%7B%22file%22%3A%7B%22projectCode%22%3A%7B%22is%22%3A%5B%22{}%22%5D%7D%7D%7D&' \
                         'type=tsv'.format(i)
         time.sleep(0.01)
-        retrieve_data(sample_url, inpath + '/metadata/icgc/sample_' + str(i) + '.tsv.gz')
+        retrieve_data(sample_url, metadata_dest + '/icgc/sample_' + str(i) + '.tsv.gz')
         time.sleep(0.01)
-        retrieve_data(donor_url, inpath + '/metadata/icgc/donor_' + str(i) + '.tsv.gz')
+        retrieve_data(donor_url, metadata_dest + '/icgc/donor_' + str(i) + '.tsv.gz')
         time.sleep(0.01)
-        retrieve_data(specimen_url, inpath + '/metadata/icgc/specimen_' + str(i) + '.tsv.gz')
+        retrieve_data(specimen_url, metadata_dest + '/icgc/specimen_' + str(i) + '.tsv.gz')
         time.sleep(0.01)
-        retrieve_data(donor_set_url, inpath + '/metadata/icgc/repository_' + str(i) + '.tsv')
+        retrieve_data(donor_set_url, metadata_dest + '/icgc/repository_' + str(i) + '.tsv')
         time.sleep(0.01)
 
 
@@ -414,15 +423,15 @@ def create_gene_table(ensembl_df, hgnc_df, expression_df):
     return gene
 
 
-def create_expression_table(expression_df):
+def create_expression_table(expression_df, db_dest):
     expression = expression_df[['sample_id', 'gene_id', 'fpkm',
                                 'tpm', 'coverage']]
     expression = expression.groupby(['sample_id', 'gene_id']).sum().reset_index().compute()
-    create_csv(expression, "expression")
+    create_csv(expression, "expression", db_dest)
     return expression
 
 
-def create_project_layer_tables(sra_meta_df, icgc_meta_df):
+def create_project_layer_tables(sra_meta_df, icgc_meta_df, db_dest):
     try:
         sra = sra_meta_df.rename(columns=database_columns)
     except:
@@ -472,13 +481,13 @@ def create_project_layer_tables(sra_meta_df, icgc_meta_df):
     countinfo_db = concat_meta[['run', 'library_name', 'library_strategy', 'library_selection',
                                 'library_source', 'library_layout']]
 
-    create_csv(project_db, 'project')
-    create_csv(sample_db, 'sample')
-    create_csv(donor_db, 'donor')
-    create_csv(countinfo_db, 'countinfo')
+    create_csv(project_db, 'project', db_dest)
+    create_csv(sample_db, 'sample', db_dest)
+    create_csv(donor_db, 'donor', db_dest)
+    create_csv(countinfo_db, 'countinfo', db_dest)
     return project_db, donor_db, sample_db, countinfo_db
 
-def create_countinfo_table(df, inpath):
+def create_countinfo_table(df, inpath, db_dest):
     merged_gene_counts = pd.read_csv(os.path.join(inpath, "results/featureCounts/merged_gene_counts.txt"),
                                      sep='\t')
     merged_gene_counts_series = merged_gene_counts.drop(
@@ -495,7 +504,7 @@ def create_countinfo_table(df, inpath):
                              'library_selection', 'library_source', 'library_layout']],
                          on='run',
                          how='left')
-    create_csv(countinfo, 'countinfo')
+    create_csv(countinfo, 'countinfo', db_dest)
 
 def create_pipeline_table(inpath):
     pipeline = pd.read_csv(os.path.join(inpath, 'results/pipeline_info/software_versions.csv'),
