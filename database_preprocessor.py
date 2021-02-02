@@ -15,6 +15,10 @@ import dask.dataframe as dd
 import pandas as pd
 import pyranges as pr
 
+#
+# Global Parameters and Definitions
+#
+
 # Create logger
 logger = logging.getLogger('Expression Store Script Logger')
 # Create console handler
@@ -30,6 +34,7 @@ logger.setLevel(logging.INFO)
 @click.command()
 @click.option('-i', '--inpath', prompt='path to nf-core/rna-seq base folder', help='input path', required=True)
 def main(inpath):
+
     start = time.time()
 
     if os.path.isfile(os.path.join(inpath + '/manifest.tsv')):
@@ -55,12 +60,13 @@ def main(inpath):
                       download_hgnc(inpath),
                       expression_df)
     create_expression_table(expression_df)
-    create_project_layer_tables(concat_sra_meta(os.path.join(inpath, "metadata/sra"), get_sra_accession_list(inpath)),
+    project_db = create_project_layer_tables(concat_sra_meta(os.path.join(inpath, "metadata/sra"), get_sra_accession_list(inpath)),
                                 join_icgc_meta(concat_icgc_meta(os.path.join(inpath, "metadata/icgc")), inpath))
 
+
+
+    create_countinfo_table(project_db[3], inpath)
     print(time.time() - start)
-
-
 #
 # HELPER FUNCTIONS
 #
@@ -105,6 +111,9 @@ def extract_sample_id(string):
     return string
 
 
+# Wrapper function to create csv from dataframe. sep=',', index=False
+def create_csv(df, file_name):
+    df.to_csv('{}.csv'.format(file_name), sep=',', index=False)
 #
 # Get identifiers and codes for downloaded sequence data
 #
@@ -243,27 +252,35 @@ def download_gdc_metadata_test():
 
 # download and process ensembl metadata, so it just returns relevant gene entries
 def download_and_process_ensembl_metadata(inpath):
-    try:
-        if not os.path.exists(os.path.join(inpath, 'metadata/ensemble/')):
-            os.makedirs(os.path.join(inpath, 'metadata/ensembl/'))
-    except:
-        logger.info('exists')
 
-    ensembl_url = 'ftp://ftp.ensembl.org/pub/' \
-                  'grch37/current/gtf/homo_sapiens/Homo_sapiens.GRCh37.87.gtf.gz'
-    retrieve_data(ensembl_url, inpath + '/metadata/ensembl/'
-                                        'Homo_sapiens.GRCh37.87.gtf.gz')
-    gunzip_files(os.path.join(inpath, "metadata/ensembl"))
-    cwd = os.getcwd()
-    os.chdir(os.path.join(inpath, "metadata/ensembl"))
-    subprocess.call('''awk -F"\t" '$3 == "gene" { print $0 }' Homo_sapiens.GRCh37.87.gtf > genes_GRCh37.gtf''',
-                    shell=True)
-    os.remove('Homo_sapiens.GRCh37.87.gtf')
-    ensembl_df = pr.read_gtf('genes_GRCh37.gtf',
-                             as_df=True)
-    ensembl_df = ensembl_df[['gene_id', 'gene_version', 'gene_name', 'gene_biotype']]
-    os.chdir(cwd)
-    return ensembl_df
+    if os.path.isfile(os.path.join(inpath, '/metadata/ensemble/genes_GRCh37.gtf')):
+        if not os.path.exists(os.path.join(inpath, 'metadata/ensembl/')):
+            os.makedirs(os.path.join(inpath, 'metadata/ensembl/'))
+            ensembl_url = 'ftp://ftp.ensembl.org/pub/' \
+                          'grch37/current/gtf/homo_sapiens/Homo_sapiens.GRCh37.87.gtf.gz'
+            retrieve_data(ensembl_url, inpath + '/metadata/ensembl/'
+                                                'Homo_sapiens.GRCh37.87.gtf.gz')
+            gunzip_files(os.path.join(inpath, "metadata/ensembl"))
+            cwd = os.getcwd()
+            os.chdir(os.path.join(inpath, "metadata/ensembl"))
+            subprocess.call('''awk -F"\t" '$3 == "gene" { print $0 }' Homo_sapiens.GRCh37.87.gtf > genes_GRCh37.gtf''',
+                            shell=True)
+            os.remove('Homo_sapiens.GRCh37.87.gtf')
+            ensembl_df = pr.read_gtf('genes_GRCh37.gtf',
+                                     as_df=True)
+            ensembl_df = ensembl_df[['gene_id', 'gene_version', 'gene_name', 'gene_biotype']]
+            os.chdir(cwd)
+            return ensembl_df
+    else:
+        logger.info('Ensembl metadata already downloaded. Processing existing file.')
+        cwd = os.getcwd()
+        os.chdir(os.path.join(inpath, "metadata/ensembl"))
+        ensembl_df = pr.read_gtf('genes_GRCh37.gtf',
+                                 as_df=True)
+        ensembl_df = ensembl_df[['gene_id', 'gene_version', 'gene_name', 'gene_biotype']]
+        os.chdir(cwd)
+        return ensembl_df
+
 
 
 # download hgnc metadata and return a dataframe containing all relevant information
@@ -401,6 +418,7 @@ def create_expression_table(expression_df):
     expression = expression_df[['sample_id', 'gene_id', 'fpkm',
                                 'tpm', 'coverage']]
     expression = expression.groupby(['sample_id', 'gene_id']).sum().reset_index().compute()
+    create_csv(expression, "expression")
     return expression
 
 
@@ -431,8 +449,8 @@ def create_project_layer_tables(sra_meta_df, icgc_meta_df):
                             'donor_tumour_staging_system_at_diagnosis', 'donor_tumour_stage_at_diagnosis',
                             'donor_tumour_stage_at_diagnosis_supplemental', 'donor_survival_time',
                             'donor_interval_of_last_followup', 'prior_malignancy', 'cancer_type_prior_malignancy',
-                            'cancer_history_first_degree_relative', 'subject_id']]
-
+                            'cancer_history_first_degree_relative']]
+    donor_db = donor_db[donor_db['donor_id'].notna()]
     sample_db = concat_meta[['run', 'sample_id', 'project_code', 'submitted_sample_id', 'icgc_specimen_id',
                              'submitted_specimen_id', 'donor_id', 'submitted_donor_id', 'analyzed_sample_interval',
                              'percentage_cellularity', 'level_of_cellularity', 'study_specimen_involved_in',
@@ -451,13 +469,42 @@ def create_project_layer_tables(sra_meta_df, icgc_meta_df):
     sample_db['body_site'] = sample_db['body_site'] \
         .fillna(sample_db['project_code'].astype(str).map(icgc_tissue_dict))
 
-    countinfo_db = concat_meta[['library_name', 'library_strategy', 'library_selection',
+    countinfo_db = concat_meta[['run', 'library_name', 'library_strategy', 'library_selection',
                                 'library_source', 'library_layout']]
-    project_db.to_csv('project.csv', sep=',')
-    sample_db.to_csv('sample.csv', sep=',')
-    donor_db.to_csv('donor.csv', sep=',')
-    countinfo_db.to_csv('countinfo.csv', sep=',')
+
+    create_csv(project_db, 'project')
+    create_csv(sample_db, 'sample')
+    create_csv(donor_db, 'donor')
+    create_csv(countinfo_db, 'countinfo')
     return project_db, donor_db, sample_db, countinfo_db
+
+def create_countinfo_table(df, inpath):
+    merged_gene_counts = pd.read_csv(os.path.join(inpath, "results/featureCounts/merged_gene_counts.txt"),
+                                     sep='\t')
+    merged_gene_counts_series = merged_gene_counts.drop(
+        ['Geneid', 'gene_name'], axis=1)
+    sum_gene_counts = merged_gene_counts_series.sum(axis=0)
+    countinfo = sum_gene_counts.to_frame()
+    countinfo = countinfo.reset_index(level=0)
+    countinfo = countinfo.rename(
+        columns={
+            'index': 'run',
+            0: 'sum_counts'})
+    countinfo = pd.merge(countinfo,
+                         df[['run', 'library_name', 'library_strategy',
+                             'library_selection', 'library_source', 'library_layout']],
+                         on='run',
+                         how='left')
+    create_csv(countinfo, 'countinfo')
+
+def create_pipeline_table(inpath):
+    pipeline = pd.read_csv(os.path.join(inpath, 'results/pipeline_info/software_versions.csv'),
+                           sep='\t',
+                           header=None)
+    pipeline = pipeline.rename(columns=pipeline.iloc[0])
+    pipeline = pipeline.iloc[1:]
+    create_csv(pipeline, "pipeline")
+    return pipeline
 
 
 # Dictionaries
@@ -498,7 +545,7 @@ sra_col_dict = {'Run': 'run',
                 'BioSample': 'sample_id',
                 'SampleType': 'sample_type',
                 'SampleName': 'sample_name',
-                'Subject_ID': 'subject_id',
+                'Subject_ID': 'donor_id',
                 'Sex': 'sex',
                 'Disease': 'disease',
                 'Tumor': 'tumour',
@@ -549,7 +596,7 @@ sra_df_cols = ['run', 'release_date', 'load_date', 'spots', 'bases', 'spots_with
                'assembly_name', 'download_path', 'experiment', 'library_name', 'library_strategy', 'library_selection',
                'library_source', 'library_layout', 'insert_size', 'insert_dev', 'plattform', 'model', 'sra_study',
                'project_code', 'study_pubmed_id', 'project_id', 'sample', 'sample_id', 'sample_type', 'TaxID',
-               'ScientificName', 'sample_name', 'g1k_pop_code', 'source', 'g1k_analysis_group', 'subject_id',
+               'ScientificName', 'sample_name', 'g1k_pop_code', 'source', 'g1k_analysis_group',
                'donor_sex', 'disease', 'tumour', 'affection_status', 'analyte_type', 'histological_type',
                'body_site', 'center_name', 'submission', 'dbgap_study_accession', 'consent', 'run_hash', 'read_hash']
 if __name__ == "__main__":
