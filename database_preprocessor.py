@@ -179,6 +179,9 @@ def get_gdc_uuid_list(inpath):
 def download_sra_metadata(project_lst, metadata_dest):
     if not os.path.exists(os.path.join(metadata_dest, 'sra/')):
         os.makedirs(os.path.join(metadata_dest, 'sra/'))
+    else:
+        downloaded_files = [os.path.basename(x).split('.')[0] for x in glob.glob(os.path.join(metadata_dest, 'sra/', '*.csv'))]
+        project_lst = [file for file in project_lst if file not in downloaded_files]
     for i in project_lst:
         sra_url = 'http://trace.ncbi.nlm.nih.gov/Traces/sra/sra.cgi?save=efetch&db=sra&rettype=runinfo&term={}'.format(
             i)
