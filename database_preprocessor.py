@@ -9,7 +9,8 @@ import shutil
 import subprocess
 import sys
 import time
-import urllib.request
+import urllib.request, urllib.error
+
 
 import dask.dataframe as dd
 import pandas as pd
@@ -94,8 +95,17 @@ def gunzip_files(inpath):
 
 
 # url request to download data
-def retrieve_data(url, destination):
-    urllib.request.urlretrieve(url, destination)
+def retrieve_data(url, destination, retry_count=0):
+    try:
+        urllib.request.urlretrieve(url, destination)
+    except ConnectionResetError as e:
+        if retry_count == 5:
+            raise e
+        time.sleep(0.5)
+        retry_count += 1
+        logger.info('There are {} tries left to download from'.format(5 - retry_count))
+        retrieve_data(url, destination, retry_count)
+
 
 
 # extract substring from a given string if it matches a pattern otherwise return original string
