@@ -6,6 +6,6 @@ dependencies:
   - conda-forge::python=3.7.3
   - conda-forge::dask
   - conda-forge::click
-  - conda-forge::progressbar
+  - conda-forge::sqlalchemy
   - conda-forge::requests
   - bioconda::pyranges
