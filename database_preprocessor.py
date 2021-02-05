@@ -1,20 +1,22 @@
-import click
 import glob
 import gzip
 import logging
 import os
 import re
-import requests
 import shutil
 import subprocess
+import sqlalchemy
 import sys
 import time
-import urllib.request, urllib.error
+import timeit
+import urllib.error
+import urllib.request
 
-
+import click
 import dask.dataframe as dd
 import pandas as pd
 import pyranges as pr
+import requests
 
 #
 # Global Parameters and Definitions
@@ -47,6 +49,7 @@ logger.setLevel(logging.INFO)
               prompt='path where to store created csv files for database',
               help='path to metadata destination')
 def main(rnaseq, sra_file, dcc_manifest, metadata_dest, db_dest):
+    print(sqlalchemy.__version__)
 
     start = time.time()
 
@@ -71,15 +74,18 @@ def main(rnaseq, sra_file, dcc_manifest, metadata_dest, db_dest):
     expression_df = dd.concat(stringtie_results_out(os.path.join(rnaseq, 'results/stringtieFPKM/')))
     create_gene_table(download_and_process_ensembl_metadata(rnaseq),
                       download_hgnc(rnaseq),
-                      expression_df)
+                      expression_df,
+                      db_dest)
     create_expression_table(expression_df, db_dest)
-    project_db = create_project_layer_tables(concat_sra_meta(os.path.join(metadata_dest, "sra"), get_sra_accession_list(sra_file)),
-                                join_icgc_meta(concat_icgc_meta(os.path.join(rnaseq, "metadata/icgc")), rnaseq), db_dest)
-
-
+    project_db = create_project_layer_tables(
+        concat_sra_meta(os.path.join(metadata_dest, "sra"), get_sra_accession_list(sra_file)),
+        join_icgc_meta(concat_icgc_meta(os.path.join(rnaseq, "metadata/icgc")), rnaseq), db_dest)
 
     create_countinfo_table(project_db[3], rnaseq, db_dest)
+    create_pipeline_table(rnaseq, db_dest)
     print(time.time() - start)
+
+
 #
 # HELPER FUNCTIONS
 #
@@ -103,9 +109,8 @@ def retrieve_data(url, destination, retry_count=0):
             raise e
         time.sleep(0.5)
         retry_count += 1
-        logger.info('There are {} tries left to download from'.format(5 - retry_count))
+        logger.warning('There are {} tries left to download from'.format(5 - retry_count))
         retrieve_data(url, destination, retry_count)
-
 
 
 # extract substring from a given string if it matches a pattern otherwise return original string
@@ -136,6 +141,8 @@ def extract_sample_id(string):
 # Wrapper function to create csv from dataframe. sep=',', index=False
 def create_csv(df, file_name, db_dest):
     df.to_csv(os.path.join(db_dest, '{}.csv'.format(file_name)), sep=',', index=False)
+
+
 #
 # Get identifiers and codes for downloaded sequence data
 #
@@ -176,7 +183,7 @@ def get_gdc_uuid_list(inpath):
         uuids = pd.concat((pd.read_csv(txt, sep='\t') for txt in gdc_files))
         uuids = uuids['id'].unique().tolist()
     except:
-        print("Not a dirctory")
+        print("Not a directory")
 
     return uuids
 
@@ -191,7 +198,8 @@ def download_sra_metadata(project_lst, metadata_dest):
         os.makedirs(os.path.join(metadata_dest, 'sra/'))
     else:
         # Check if SRA CSV files have already been downloaded, and if so, skip download
-        downloaded_files = [os.path.basename(x).split('.')[0] for x in glob.glob(os.path.join(metadata_dest, 'sra/', '*.csv'))]
+        downloaded_files = [os.path.basename(x).split('.')[0] for x in
+                            glob.glob(os.path.join(metadata_dest, 'sra/', '*.csv'))]
         project_lst = [file for file in project_lst if file not in downloaded_files]
     for i in project_lst:
         sra_url = 'http://trace.ncbi.nlm.nih.gov/Traces/sra/sra.cgi?save=efetch&db=sra&rettype=runinfo&term={}'.format(
@@ -204,43 +212,35 @@ def download_icgc_project_metadata(project_lst, metadata_dest):
     if not os.path.exists(os.path.join(metadata_dest, 'icgc/')):
         os.makedirs(os.path.join(metadata_dest, 'icgc/'))
     for i in project_lst:
-        sample_url = 'https://dcc.icgc.org/api/v1/download?fn=/current/Projects/' + i + '/sample' \
-                                                                                        '.' + i + '.tsv.gz '
-        donor_url = 'https://dcc.icgc.org/api/v1/download?fn=/current/Projects/' + i + '/donor' \
-                                                                                       '.' + i + '.tsv.gz '
-        specimen_url = 'https://dcc.icgc.org/api/v1/download?fn=/current/Projects/' + i + '/specimen' \
-                                                                                          '.' + i + '.tsv.gz '
+        sample_url = 'https://dcc.icgc.org/api/v1/download?fn=/current/Projects/{}/sample.{}.tsv.gz'.format(i, i)
+        donor_url = 'https://dcc.icgc.org/api/v1/download?fn=/current/Projects/{}/donor.{}.tsv.gz'.format(i, i)
+        specimen_url = 'https://dcc.icgc.org/api/v1/download?fn=/current/Projects/{}/specimen.{}.tsv.gz'.format(i, i)
         donor_set_url = 'https://dcc.icgc.org/api/v1/repository/files/export?' \
                         'filters=%7B%22file%22%3A%7B%22projectCode%22%3A%7B%22is%22%3A%5B%22{}%22%5D%7D%7D%7D&' \
                         'type=tsv'.format(i)
-        time.sleep(0.01)
-        if os.path.isfile(os.path.join(metadata_dest, 'icgc/sample_' + str(i) + '.tsv.gz'))\
+
+        if os.path.isfile(os.path.join(metadata_dest, 'icgc/sample_' + str(i) + '.tsv.gz')) \
                 or os.path.isfile(os.path.join(metadata_dest, 'icgc/sample_' + str(i) + '.tsv')):
             logger.info("sample metadata for {} already exists".format(i))
         else:
             retrieve_data(sample_url, metadata_dest + '/icgc/sample_' + str(i) + '.tsv.gz')
 
-        time.sleep(0.01)
-        if os.path.isfile(os.path.join(metadata_dest, 'icgc/donor_' + str(i) + '.tsv.gz'))\
+        if os.path.isfile(os.path.join(metadata_dest, 'icgc/donor_' + str(i) + '.tsv.gz')) \
                 or os.path.isfile(os.path.join(metadata_dest, 'icgc/donor_' + str(i) + '.tsv')):
             logger.info("donor metadata for {} already exists".format(i))
         else:
             retrieve_data(donor_url, metadata_dest + '/icgc/donor_' + str(i) + '.tsv.gz')
 
-        time.sleep(0.01)
-        if os.path.isfile(os.path.join(metadata_dest, 'icgc/specimen_' + str(i) + '.tsv.gz'))\
+        if os.path.isfile(os.path.join(metadata_dest, 'icgc/specimen_' + str(i) + '.tsv.gz')) \
                 or os.path.isfile(os.path.join(metadata_dest, 'icgc/specimen_' + str(i) + '.tsv')):
             logger.info("specimen metadata for {} already exists".format(i))
         else:
             retrieve_data(specimen_url, metadata_dest + '/icgc/specimen_' + str(i) + '.tsv.gz')
 
-        time.sleep(0.01)
         if os.path.isfile(os.path.join(metadata_dest, 'icgc/repository_' + str(i) + '.tsv')):
             logger.info("repository metadata for {} already exists".format(i))
         else:
             retrieve_data(donor_set_url, metadata_dest + '/icgc/repository_' + str(i) + '.tsv')
-
-        time.sleep(0.01)
 
 
 ### UNDER CONSTRUCTION
@@ -294,7 +294,6 @@ def download_gdc_metadata_test():
 
 # download and process ensembl metadata, so it just returns relevant gene entries
 def download_and_process_ensembl_metadata(inpath):
-
     if os.path.isfile(os.path.join(inpath, '/metadata/ensemble/genes_GRCh37.gtf')):
         if not os.path.exists(os.path.join(inpath, 'metadata/ensembl/')):
             os.makedirs(os.path.join(inpath, 'metadata/ensembl/'))
@@ -322,7 +321,6 @@ def download_and_process_ensembl_metadata(inpath):
         ensembl_df = ensembl_df[['gene_id', 'gene_version', 'gene_name', 'gene_biotype']]
         os.chdir(cwd)
         return ensembl_df
-
 
 
 # download hgnc metadata and return a dataframe containing all relevant information
@@ -354,7 +352,7 @@ def concat_sra_meta(inpath_sra_meta_csv, used_accessions):
     return frame
 
 
-# concat metadatafrom downloaded ICGC DCC metadata files
+# concat metadata from downloaded ICGC DCC metadata files
 def concat_icgc_meta(inpath_icgc_meta):
     icgc_tsv_files = glob.glob(inpath_icgc_meta + "/*.tsv")
     icgc_donor = []
@@ -436,12 +434,11 @@ def stringtie_results_out(res_inpath):
                 'Strand': 'strand'})
         dd_frame = dd.from_pandas(frame, npartitions=2)
         data.append(dd_frame)
-
     return data
 
 
 # Create TABLES
-def create_gene_table(ensembl_df, hgnc_df, expression_df):
+def create_gene_table(ensembl_df, hgnc_df, expression_df, db_dest):
     # Convert DASK DataFrame to Pandas DataFrame
     expression_df = expression_df[['gene_id', 'gene_name', 'reference', 'strand']]
     expression_df = expression_df.drop_duplicates().compute()
@@ -453,6 +450,7 @@ def create_gene_table(ensembl_df, hgnc_df, expression_df):
                     left_on='gene_name',
                     right_on='symbol',
                     how='left')
+    create_csv(gene, 'gene', db_dest)
     return gene
 
 
@@ -517,8 +515,8 @@ def create_project_layer_tables(sra_meta_df, icgc_meta_df, db_dest):
     create_csv(project_db, 'project', db_dest)
     create_csv(sample_db, 'sample', db_dest)
     create_csv(donor_db, 'donor', db_dest)
-    create_csv(countinfo_db, 'countinfo', db_dest)
     return project_db, donor_db, sample_db, countinfo_db
+
 
 def create_countinfo_table(df, inpath, db_dest):
     merged_gene_counts = pd.read_csv(os.path.join(inpath, "results/featureCounts/merged_gene_counts.txt"),
@@ -532,6 +530,7 @@ def create_countinfo_table(df, inpath, db_dest):
         columns={
             'index': 'run',
             0: 'sum_counts'})
+    countinfo['run'] = countinfo['run'].apply(lambda x: extract_sample_id(x))
     countinfo = pd.merge(countinfo,
                          df[['run', 'library_name', 'library_strategy',
                              'library_selection', 'library_source', 'library_layout']],
@@ -539,31 +538,36 @@ def create_countinfo_table(df, inpath, db_dest):
                          how='left')
     create_csv(countinfo, 'countinfo', db_dest)
 
-def create_pipeline_table(inpath):
+
+def create_pipeline_table(inpath, db_dest):
     pipeline = pd.read_csv(os.path.join(inpath, 'results/pipeline_info/software_versions.csv'),
                            sep='\t',
                            header=None)
     pipeline = pipeline.rename(columns=pipeline.iloc[0])
     pipeline = pipeline.iloc[1:]
-    create_csv(pipeline, "pipeline")
+    create_csv(pipeline, "pipeline", db_dest)
     return pipeline
 
 
 # Dictionaries
-icgc_col_names_repository = {'Access': 'access',
-                             'File ID': 'file_id',
-                             'Object ID': 'object_id',
-                             'File Name': 'file_name',
-                             'ICGC Donor': 'icgc_donor_id',
-                             'Specimen ID': 'icgc_specimen_id',
-                             'Specimen Type': 'specimen_type',
-                             'Sample ID': 'icgc_sample_id',
-                             'Repository': 'repository',
-                             'Project': 'project_code',
-                             'Data Type': 'data_type',
-                             'Experimental Strategy': 'experiemntal_strategy',
-                             'Format': 'format',
-                             'Size (bytes)': 'size_bytes'}
+
+icgc_col_names_repository = {
+  "Access": "access",
+  "File ID": "file_id",
+  "Object ID": "object_id",
+  "File Name": "file_name",
+  "ICGC Donor": "icgc_donor_id",
+  "Specimen ID": "icgc_specimen_id",
+  "Specimen Type": "specimen_type",
+  "Sample ID": "icgc_sample_id",
+  "Repository": "repository",
+  "Project": "project_code",
+  "Data Type": "data_type",
+  "Experimental Strategy": "experiemntal_strategy",
+  "Format": "format",
+  "Size (bytes)": "size_bytes"
+}
+
 sra_col_dict = {'Run': 'run',
                 'ReleaseDate': 'release_date',
                 'LoadDate': 'load_date',
