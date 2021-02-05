@@ -29,12 +29,66 @@ Activate the environment with
 conda activate expression-store
 ```
 
-and run **database_preprocessor.py** 
+
+
+## Running database_preprocessor.py
+
+### Script Parameters
+
+- Provide Path to output directory of nf-core/rnaseq
+
+```--rnaseq <absolute path to nf-core/rnaseq base folder>``` 
+
+- Provide Path to SRA Accession file, which is used to download SRR files using the nf-core pipeline qbic-pipelines/sradownloader
+
+```--sra_file <absolute path do accession list (*.txt)>```
+
+- Provide Path to ICGC DCC manifest file, which is used to download sequences using the score-client
+
+```--dcc_manifest <absolute path to manifest files```
+
+- Provide Path to your desired metadata destination. This directory will be used to store the downloaded metadata
+
+```--metadata_dest <absolute path to destination directory of the downloaded metadata>```
+
+- Provide Path to your desired database directory, where the csv-files will be stored. These can be loaded into the database later.
+
+```--db_dest <absolute path to your desired output directory>```
+
+
+
+## Setting Up PostgreSQL Server
+
+### Requirements
+
+- CentOS Linux release 7.6.1810 (Core)
+- Conda
+
+### Installing PostgreSQL Server on CentOS
+
+1. Install PostgreSQL on CentOS 7
 
 ```
-database_preprocessor.py -i <PATH TO NF-CORE/RNA-SEQ BASE DIRECTORY>
+sudo yum install postgresql-server postgresql-contrib
 ```
 
-**!!!!!!!!**
+2. Initialize the Database
 
-Accession List for SRA and Manifest files of GDC and ICGC DCC are mandatory at the moment.
+```
+sudo postgresql-setup initdb
+```
+
+3. Start and Enable PostgreSQL
+
+```
+sudo systemctl start postgresql ; sudo systemctl enable postgresql
+```
+
+## Basic Setup for PostgreSQL
+
+Change password of automatically generated "postgres" user (in our usecase I set it to **expression**)
+
+```
+sudo passwd postgres
+```
+
