@@ -1,0 +1,16 @@
+{
+  "Access": "access",
+  "File ID": "file_id",
+  "Object ID": "object_id",
+  "File Name": "file_name",
+  "ICGC Donor": "icgc_donor_id",
+  "Specimen ID": "icgc_specimen_id",
+  "Specimen Type": "specimen_type",
+  "Sample ID": "icgc_sample_id",
+  "Repository": "repository",
+  "Project": "project_code",
+  "Data Type": "data_type",
+  "Experimental Strategy": "experiemntal_strategy",
+  "Format": "format",
+  "Size (bytes)": "size_bytes"
+}

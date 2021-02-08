@@ -1,0 +1,9 @@
+{
+  "icgc_donor_id": "donor_id",
+  "icgc_sample_id": "sample_id",
+  "sex": "donor_sex",
+  "bio_sample": "sample_id",
+  "bio_project": "project_id",
+  "access": "consent",
+  "file_name": "run"
+}
