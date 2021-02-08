@@ -1,5 +1,6 @@
 import glob
 import gzip
+import json
 import logging
 import os
 import re
@@ -562,100 +563,26 @@ def convert_countinfo(rnaseq):
 
 
 # Dictionaries
-
-icgc_col_names_repository = {
-    "Access": "access",
-    "File ID": "file_id",
-    "Object ID": "object_id",
-    "File Name": "file_name",
-    "ICGC Donor": "icgc_donor_id",
-    "Specimen ID": "icgc_specimen_id",
-    "Specimen Type": "specimen_type",
-    "Sample ID": "icgc_sample_id",
-    "Repository": "repository",
-    "Project": "project_code",
-    "Data Type": "data_type",
-    "Experimental Strategy": "experiemntal_strategy",
-    "Format": "format",
-    "Size (bytes)": "size_bytes"
-}
-
-sra_col_dict = {'Run': 'run',
-                'ReleaseDate': 'release_date',
-                'LoadDate': 'load_date',
-                'avgLength': 'avg_length',
-                'AssemblyName': 'assembly_name',
-                'Experiment': 'experiment',
-                'LibraryName': 'library_name',
-                'LibraryStrategy': 'library_strategy',
-                'LibrarySelection': 'library_selection',
-                'LibrarySource': 'library_source',
-                'LibraryLayout': 'library_layout',
-                'InsertSize': 'insert_size',
-                'InsertDev': 'insert_dev',
-                'Platform': 'plattform',
-                'Model': 'model',
-                'SRAStudy': 'sra_study',
-                'BioProject': 'project_code',
-                'Study_Pubmed_id': 'study_pubmed_id',
-                'ProjectID': 'project_id',
-                'Sample': 'sample',
-                'BioSample': 'sample_id',
-                'SampleType': 'sample_type',
-                'SampleName': 'sample_name',
-                'Subject_ID': 'donor_id',
-                'Sex': 'sex',
-                'Disease': 'disease',
-                'Tumor': 'tumour',
-                'Affection_Status': 'affection_status',
-                'Analyte_Type': 'analyte_type',
-                'Histological_Type': 'histological_type',
-                'Body_Site': 'body_site',
-                'CenterName': 'center_name',
-                'Submission': 'submission',
-                'Consent': 'consent',
-                'RunHash': 'run_hash',
-                'ReadHash': 'read_hash'}
-
-database_columns = {'icgc_donor_id': 'donor_id',
-                    'icgc_sample_id': 'sample_id',
-                    'sex': 'donor_sex',
-                    'bio_sample': 'sample_id',
-                    'bio_project': 'project_id',
-                    'access': 'consent',
-                    'file_name': 'run'
-                    }
-icgc_tissue_dict = {
-    'MALY-DE': 'Blood',
-    'PACA-CA': 'Pancreas'
-}
+with \
+        open('dicts_lists/sra_col_dict.json', 'r') as sra_col, \
+        open('dicts_lists/icgc_col_names_repository.json', 'r') as icgc_col_names, \
+        open('dicts_lists/database_columns.json', 'r') as db_col, \
+        open('dicts_lists/icgc_tissue_dict.json', 'r') as icgc_tissue:
+    sra_col_dict = json.load(sra_col)
+    icgc_col_names_repository = json.load(icgc_col_names)
+    database_columns = json.load(db_col)
+    icgc_tissue_dict = json.load(icgc_tissue)
 
 # Database columns
-rep_man_cols = ['access', 'file_id', 'object_id', 'file_name', 'icgc_donor_id', 'icgc_specimen_id', 'specimen_type',
-                'icgc_sample_id', 'repository', 'project_code', 'Study', 'data_type', 'experiemntal_strategy', 'format',
-                'size_bytes']
-donor_df_cols = ['icgc_donor_id', 'project_code', 'study_donor_involved_in', 'submitted_donor_id', 'donor_sex',
-                 'donor_vital_status', 'disease_status_last_followup', 'donor_relapse_type',
-                 'donor_age_at_diagnosis', 'donor_age_at_enrollment', 'donor_age_at_last_followup',
-                 'donor_relapse_interval', 'donor_diagnosis_icd10', 'donor_tumour_staging_system_at_diagnosis',
-                 'donor_tumour_stage_at_diagnosis', 'donor_tumour_stage_at_diagnosis_supplemental',
-                 'donor_survival_time', 'donor_interval_of_last_followup', 'prior_malignancy',
-                 'cancer_type_prior_malignancy', 'cancer_history_first_degree_relative']
-sample_df_cols = ['icgc_sample_id', 'project_code', 'submitted_sample_id', 'icgc_specimen_id', 'submitted_specimen_id',
-                  'icgc_donor_id', 'submitted_donor_id', 'analyzed_sample_interval', 'percentage_cellularity',
-                  'level_of_cellularity', 'study', 'study_specimen_involved_in', 'specimen_type', 'specimen_type_other',
-                  'specimen_interval', 'specimen_donor_treatment_type', 'specimen_donor_treatment_type_other',
-                  'specimen_processing', 'specimen_processing_other', 'specimen_storage', 'specimen_storage_other',
-                  'tumour_confirmed', 'specimen_biobank', 'specimen_biobank_id', 'specimen_available',
-                  'tumour_histological_type', 'tumour_grading_system', 'tumour_grade', 'tumour_grade_supplemental',
-                  'tumour_stage_system', 'tumour_stage', 'tumour_stage_supplemental',
-                  'digital_image_of_stained_section']
-sra_df_cols = ['run', 'release_date', 'load_date', 'spots', 'bases', 'spots_with_mates', 'avg_length', 'size_MB',
-               'assembly_name', 'download_path', 'experiment', 'library_name', 'library_strategy', 'library_selection',
-               'library_source', 'library_layout', 'insert_size', 'insert_dev', 'plattform', 'model', 'sra_study',
-               'project_code', 'study_pubmed_id', 'project_id', 'sample', 'sample_id', 'sample_type', 'TaxID',
-               'ScientificName', 'sample_name', 'g1k_pop_code', 'source', 'g1k_analysis_group',
-               'donor_sex', 'disease', 'tumour', 'affection_status', 'analyte_type', 'histological_type',
-               'body_site', 'center_name', 'submission', 'dbgap_study_accession', 'consent', 'run_hash', 'read_hash']
+with \
+        open('dicts_lists/rep_man_cols.json', 'r') as rep_man, \
+        open('dicts_lists/donor_df_cols.json', 'r') as don, \
+        open('dicts_lists/sample_df_cols.json', 'r') as sam, \
+        open('dicts_lists/sra_df_cols.json', 'r') as sra_df:
+    rep_man_cols = json.load(rep_man)
+    donor_df_cols = json.load(don)
+    sample_df_cols = json.load(sam)
+    sra_df_cols = json.load(sra_df)
+
 if __name__ == "__main__":
     sys.exit(main())
