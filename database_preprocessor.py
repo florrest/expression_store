@@ -8,7 +8,6 @@ import subprocess
 import sqlalchemy
 import sys
 import time
-import timeit
 import urllib.error
 import urllib.request
 
@@ -49,8 +48,6 @@ logger.setLevel(logging.INFO)
               prompt='path where to store created csv files for database',
               help='path to metadata destination')
 def main(rnaseq, sra_file, dcc_manifest, metadata_dest, db_dest):
-    print(sqlalchemy.__version__)
-
     start = time.time()
 
     if dcc_manifest is not None:
@@ -72,11 +69,12 @@ def main(rnaseq, sra_file, dcc_manifest, metadata_dest, db_dest):
 
     logger.info('Creating CSV to load into database')
     expression_df = dd.concat(stringtie_results_out(os.path.join(rnaseq, 'results/stringtieFPKM/')))
+    raw_count_df = convert_countinfo(rnaseq)
     create_gene_table(download_and_process_ensembl_metadata(rnaseq),
                       download_hgnc(rnaseq),
                       expression_df,
                       db_dest)
-    create_expression_table(expression_df, db_dest)
+    create_expression_table(expression_df, raw_count_df, db_dest)
     project_db = create_project_layer_tables(
         concat_sra_meta(os.path.join(metadata_dest, "sra"), get_sra_accession_list(sra_file)),
         join_icgc_meta(concat_icgc_meta(os.path.join(rnaseq, "metadata/icgc")), rnaseq), db_dest)
@@ -84,6 +82,8 @@ def main(rnaseq, sra_file, dcc_manifest, metadata_dest, db_dest):
     create_countinfo_table(project_db[3], rnaseq, db_dest)
     create_pipeline_table(rnaseq, db_dest)
     print(time.time() - start)
+
+    convert_countinfo(rnaseq)
 
 
 #
@@ -454,10 +454,11 @@ def create_gene_table(ensembl_df, hgnc_df, expression_df, db_dest):
     return gene
 
 
-def create_expression_table(expression_df, db_dest):
+def create_expression_table(expression_df, raw_count_df, db_dest):
     expression = expression_df[['sample_id', 'gene_id', 'fpkm',
                                 'tpm', 'coverage']]
     expression = expression.groupby(['sample_id', 'gene_id']).sum().reset_index().compute()
+    expression = pd.merge(expression, raw_count_df, on=['gene_id', 'sample_id'], how='left')
     create_csv(expression, "expression", db_dest)
     return expression
 
@@ -549,23 +550,34 @@ def create_pipeline_table(inpath, db_dest):
     return pipeline
 
 
+def convert_countinfo(rnaseq):
+    df = pd.read_csv(os.path.join(rnaseq, "results/featureCounts/merged_gene_counts.txt"), sep='\t')
+    df.columns = list(map(lambda x: extract_sample_id(x), df.columns))
+    df = df.drop(['gene_name'], axis=1).set_index(['Geneid'])
+    df = df.stack().to_frame().reset_index()
+    df = df.rename(columns={'Geneid': 'gene_id',
+                            'level_1': 'sample_id',
+                            0: 'raw_count'})
+    return df
+
+
 # Dictionaries
 
 icgc_col_names_repository = {
-  "Access": "access",
-  "File ID": "file_id",
-  "Object ID": "object_id",
-  "File Name": "file_name",
-  "ICGC Donor": "icgc_donor_id",
-  "Specimen ID": "icgc_specimen_id",
-  "Specimen Type": "specimen_type",
-  "Sample ID": "icgc_sample_id",
-  "Repository": "repository",
-  "Project": "project_code",
-  "Data Type": "data_type",
-  "Experimental Strategy": "experiemntal_strategy",
-  "Format": "format",
-  "Size (bytes)": "size_bytes"
+    "Access": "access",
+    "File ID": "file_id",
+    "Object ID": "object_id",
+    "File Name": "file_name",
+    "ICGC Donor": "icgc_donor_id",
+    "Specimen ID": "icgc_specimen_id",
+    "Specimen Type": "specimen_type",
+    "Sample ID": "icgc_sample_id",
+    "Repository": "repository",
+    "Project": "project_code",
+    "Data Type": "data_type",
+    "Experimental Strategy": "experiemntal_strategy",
+    "Format": "format",
+    "Size (bytes)": "size_bytes"
 }
 
 sra_col_dict = {'Run': 'run',
