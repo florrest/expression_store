@@ -466,7 +466,7 @@ class DataProcessor:
 
         concat_meta = pd.concat([final_merge, sra], axis=0)
 
-        project_db = concat_meta[['project_code', 'study', 'Study', 'sra_study', 'project_id',
+        project_db = concat_meta[['project_code', 'study', 'sra_study', 'project_id',
                                   'study_pubmed_id', 'dbgap_study_accession']]
         project_db = project_db.drop_duplicates()
 
