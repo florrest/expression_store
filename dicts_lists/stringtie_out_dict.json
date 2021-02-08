@@ -1,0 +1,11 @@
+{
+  "Gene ID": "gene_id",
+  "Gene Name": "gene_name",
+  "FPKM": "fpkm",
+  "TPM": "tpm",
+  "Coverage": "coverage",
+  "Start": "start_pos",
+  "End": "end_pos",
+  "Reference": "reference",
+  "Strand": "strand"
+}
