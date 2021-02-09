@@ -111,13 +111,14 @@ class Helper:
 
     # extract substring from a given string if it matches a pattern otherwise return original string
     @staticmethod
-    def extract_run_id(string):
+    def extract_icgc_run_id(string):
         string = string.split('.')[1]
         if string.startswith("SWID"):
             new = re.sub(r'_R._00.', "", string)
             return new
         else:
-            return string
+            new = re.sub(r'-R.', "", string)
+            return new
 
     # extract substring from a given string if it matches a pattern otherwise return original string
     @staticmethod
@@ -394,7 +395,7 @@ class DataProcessor:
             merge_rep_man = pd.merge(repository_df, manifest_df,
                                      on=['file_id', 'file_name'],
                                      how='right')
-            merge_rep_man['file_name'] = merge_rep_man['file_name'].apply(lambda x: Helper.extract_run_id(x))
+            merge_rep_man['file_name'] = merge_rep_man['file_name'].apply(lambda x: Helper.extract_icgc_run_id(x))
             sample_df = pd.merge(sample_df, specimen_df,
                                  on=['icgc_specimen_id', 'icgc_donor_id', 'project_code', 'submitted_donor_id',
                                      'submitted_specimen_id', 'percentage_cellularity', 'level_of_cellularity'],
@@ -472,7 +473,9 @@ class DataProcessor:
 
         donor_db = concat_meta[ListDict.donor_db_list]
         donor_db = donor_db[donor_db['donor_id'].notna()]
+        donor_db = donor_db.drop_duplicates()
         sample_db = concat_meta[ListDict.sample_db_list]
+        sample_db = sample_db.drop_duplicates()
         sample_db['body_site'] = sample_db['body_site'] \
             .fillna(sample_db['project_code'].astype(str).map(ListDict.icgc_tissue_dict))
 
@@ -503,6 +506,7 @@ class DataProcessor:
                                  'library_selection', 'library_source', 'library_layout']],
                              on='run',
                              how='left')
+        countinfo = countinfo.drop_duplicates()
         Helper.create_csv(countinfo, 'countinfo', db_dest)
 
     @staticmethod
