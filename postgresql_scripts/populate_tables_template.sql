@@ -7,12 +7,12 @@
 
 COPY gene (gene_id,gene_name,reference,strand,gene_version,
     gene_biotype,hgnc_id,symbol,locus_group,locus_type,gene_family)
-    FROM '/home/flo/Schreibtisch/test_folder/gene.csv'
+    FROM '$PATH$/gene.csv'
     DELIMITER ','
     CSV HEADER;
 
 COPY project(project_code,study,sra_study,project_id,study_pubmed_id,dbgap_study_accession)
-    FROM '/home/flo/Schreibtisch/test_folder/project.csv'
+    FROM '$PATH$/project.csv'
     DELIMITER ','
     CSV HEADER;
 /*
@@ -23,7 +23,7 @@ COPY donor(project_code,donor_id,submitted_donor_id,donor_sex,donor_vital_status
     donor_diagnosis_icd10,donor_tumour_staging_system_at_diagnosis,donor_tumour_stage_at_diagnosis,
     donor_tumour_stage_at_diagnosis_supplemental,donor_survival_time,donor_interval_of_last_followup,
     prior_malignancy,cancer_type_prior_malignancy,cancer_history_first_degree_relative)
-    FROM '/home/flo/Schreibtisch/test_folder/donor.csv'
+    FROM '$PATH$/donor.csv'
     DELIMITER ','
     CSV HEADER;
 
@@ -41,7 +41,7 @@ COPY sample(run,sample_id,project_code,submitted_sample_id,icgc_specimen_id,subm
     study_donor_involved_in,consent,repository,experiemntal_strategy,assembly_name,experiment,project_id,sample,
     sample_type,sample_name, source,disease,tumour,affection_status,analyte_type,histological_type,body_site,
     center_name,submission)
-    FROM '/home/flo/Schreibtisch/test_folder/sample.csv'
+    FROM '$PATH$/sample.csv'
     DELIMITER ','
     CSV HEADER;
 
@@ -50,7 +50,7 @@ COPY sample(run,sample_id,project_code,submitted_sample_id,icgc_specimen_id,subm
 */
 
 COPY expression(sample_id,gene_id,fpkm,tpm,coverage,raw_count)
-    FROM '/home/flo/Schreibtisch/test_folder/expression.csv'
+    FROM '$PATH$/expression.csv'
     DELIMITER ','
     CSV HEADER;
 
@@ -60,7 +60,7 @@ COPY expression(sample_id,gene_id,fpkm,tpm,coverage,raw_count)
 */
 
 COPY countinfo(run,sum_counts,library_name,library_strategy,library_selection,library_source,library_layout)
-    FROM '/home/flo/Schreibtisch/test_folder/countinfo.csv'
+    FROM '$PATH$/countinfo.csv'
     DELIMITER ','
     CSV HEADER;
 
@@ -70,7 +70,7 @@ COPY countinfo(run,sum_counts,library_name,library_strategy,library_selection,li
 
 COPY pipeline(nf_core_rnaseq,Nextflow,FastQC,Cutadapt,Trim_Galore,SortMeRNA,STAR,HISAT2,Picard_MarkDuplicates,
     Samtools,featureCounts,Salmon,StringTie,Preseq,deepTools,RSeQC,dupRadar,edgeR,Qualimap,MultiQC)
-    FROM '/home/flo/Schreibtisch/test_folder/pipeline.csv'
+    FROM '$PATH$/pipeline.csv'
     DELIMITER ','
     CSV HEADER;
 
