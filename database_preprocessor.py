@@ -513,9 +513,12 @@ class DataProcessor:
     def create_pipeline_table(inpath, db_dest):
         pipeline = pd.read_csv(os.path.join(inpath, 'results/pipeline_info/software_versions.csv'),
                                sep='\t',
-                               header=None)
+                               header=None).T
         pipeline = pipeline.rename(columns=pipeline.iloc[0])
         pipeline = pipeline.iloc[1:]
+        pipeline = pipeline.rename(columns={'Trim Galore!': 'Trim_Galore',
+                                            'Picard MarkDuplicates': 'Picard_MarkDuplicates',
+                                            'nf-core/rnaseq': 'nf_core_rnaseq'})
         Helper.create_csv(pipeline, "pipeline", db_dest)
         return pipeline
 
