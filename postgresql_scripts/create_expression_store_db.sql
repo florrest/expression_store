@@ -1,3 +1,5 @@
+DROP
+DATABASE IF EXISTS expression_store;
 CREATE
 DATABASE expression_store;
 
@@ -10,6 +12,7 @@ DROP TABLE IF EXISTS sample CASCADE;
 DROP TABLE IF EXISTS expression CASCADE;
 DROP TABLE IF EXISTS gene CASCADE;
 DROP TABLE IF EXISTS countinfo CASCADE;
+DROP TABLE IF EXISTS pipeline CASCADE;
 DROP TABLE IF EXISTS sample_has_expression CASCADE;
 
 /*
@@ -17,18 +20,19 @@ DROP TABLE IF EXISTS sample_has_expression CASCADE;
  */
 CREATE TABLE project
 (
-    project_code          VARCHAR(30) PRIMARY KEY,
+    project_code          VARCHAR(30),
     study                 VARCHAR(30) NULL,
     sra_study             VARCHAR(30) NULL,
     project_id            VARCHAR(30) NULL,
     study_pubmed_id       FLOAT NULL,
-    dbgap_study_accession VARCHAR(10) NULL
+    dbgap_study_accession VARCHAR(10) NULL,
+    PRIMARY KEY (project_code)
 );
 
 CREATE TABLE donor
 (
     project_code                                 VARCHAR(100),
-    donor_id                                     VARCHAR(100) PRIMARY KEY,
+    donor_id                                     VARCHAR(100),
     submitted_donor_id                           VARCHAR(100),
     donor_sex                                    VARCHAR(100),
     donor_vital_status                           VARCHAR(100),
@@ -46,13 +50,13 @@ CREATE TABLE donor
     donor_interval_of_last_followup              VARCHAR(100),
     prior_malignancy                             VARCHAR(100),
     cancer_type_prior_malignancy                 VARCHAR(100),
-    cancer_history_first_degree_relative         VARCHAR(100)
-
+    cancer_history_first_degree_relative         VARCHAR(100),
+    PRIMARY KEY (donor_id)
 );
 CREATE TABLE sample
 (
-    id                                  INTEGER,
-    run                                 VARCHAR(100) PRIMARY KEY,
+    run_id                              INTEGER,
+    run                                 VARCHAR(100),
     sample_id                           VARCHAR(100),
     project_code                        VARCHAR(100),
     submitted_sample_id                 VARCHAR(100),
@@ -103,12 +107,13 @@ CREATE TABLE sample
     histological_type                   VARCHAR(100),
     body_site                           VARCHAR(100),
     center_name                         VARCHAR(100),
-    submission                          VARCHAR(100)
+    submission                          VARCHAR(100),
+    PRIMARY KEY (run)
 );
 
 CREATE TABLE expression
 (
-    id        INTEGER,
+    run_id    INTEGER,
     sample_id VARCHAR(100),
     gene_id   VARCHAR(25),
     fpkm      REAL,
@@ -120,7 +125,7 @@ CREATE TABLE expression
 
 CREATE TABLE gene
 (
-    gene_id      VARCHAR(100) PRIMARY KEY,
+    gene_id      VARCHAR(100),
     gene_name    VARCHAR(100),
     reference    VARCHAR(100),
     strand       VARCHAR(100),
@@ -130,19 +135,91 @@ CREATE TABLE gene
     symbol       VARCHAR(100),
     locus_group  VARCHAR(100),
     locus_type   VARCHAR(100),
-    gene_family  VARCHAR(1000)
+    gene_family  VARCHAR(1000),
+    PRIMARY KEY (gene_id)
 );
 
 CREATE TABLE countinfo
 (
-    id                INTEGER,
-    run               VARCHAR(100) PRIMARY KEY,
+    run_id            INTEGER,
+    run               VARCHAR(100),
     sum_counts        VARCHAR(100),
     library_name      VARCHAR(100),
     library_strategy  VARCHAR(100),
     library_selection VARCHAR(100),
     library_source    VARCHAR(100),
-    library_layout    VARCHAR(100)
+    library_layout    VARCHAR(100),
+    PRIMARY KEY (run)
 );
 
+CREATE TABLE pipeline
+(
+    pipeline_id           SERIAL,
+    nf_core_rnaseq        VARCHAR(100),
+    Nextflow              VARCHAR(100),
+    FastQC                VARCHAR(100),
+    Cutadapt              VARCHAR(100),
+    Trim_Galore           VARCHAR(100),
+    SortMeRNA             VARCHAR(100),
+    STAR                  VARCHAR(100),
+    HISAT2                VARCHAR(100),
+    Picard_MarkDuplicates VARCHAR(100),
+    Samtools              VARCHAR(100),
+    featureCounts         VARCHAR(100),
+    Salmon                VARCHAR(100),
+    StringTie             VARCHAR(100),
+    Preseq                VARCHAR(100),
+    deepTools             VARCHAR(100),
+    RSeQC                 VARCHAR(100),
+    dupRadar              VARCHAR(100),
+    edgeR                 VARCHAR(100),
+    Qualimap              VARCHAR(100),
+    MultiQC               VARCHAR(100),
+    PRIMARY KEY (pipeline_id)
+);
 
+CREATE TABLE sample_has_expression
+(
+    run_id      SERIAL,
+    pipeline_id SERIAL,
+    run         VARCHAR(100),
+    PRIMARY KEY (run_id)
+);
+
+/*
+DEFINING CONSTRAINTS
+*/
+ALTER TABLE donor
+    ADD CONSTRAINT fk_donor
+        FOREIGN KEY (project_code)
+            REFERENCES project (project_code);
+
+ALTER TABLE sample
+    ADD CONSTRAINT fk_sample_donor
+        FOREIGN KEY (donor_id)
+            REFERENCES donor (donor_id);
+
+ALTER TABLE sample
+    ADD CONSTRAINT fk_sample_project
+        FOREIGN KEY (project_code)
+            REFERENCES project (project_code);
+
+ALTER TABLE expression
+    ADD CONSTRAINT fk_expression_gene
+        FOREIGN KEY (gene_id)
+            REFERENCES gene (gene_id);
+
+ALTER TABLE expression
+    ADD CONSTRAINT fk_expression_she
+        FOREIGN KEY (run_id)
+            REFERENCES sample_has_expression (run_id);
+
+ALTER TABLE sample
+    ADD CONSTRAINT fk_sample_she
+        FOREIGN KEY (run_id)
+            REFERENCES sample_has_expression (run_id);
+
+ALTER TABLE countinfo
+    ADD CONSTRAINT fk_countinfo_she
+        FOREIGN KEY (run_id)
+            REFERENCES sample_has_expression (run_id);
