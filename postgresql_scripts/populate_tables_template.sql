@@ -1,8 +1,15 @@
-DROP TABLE IF EXISTS sample_has_expression CASCADE;
-
 /*
  Inserting into PROJECT table, if data not already exists
 */
+/*
+ Inserting into expression table, if data not already exists
+*/
+
+COPY gene (gene_id,gene_name,reference,strand,gene_version,
+    gene_biotype,hgnc_id,symbol,locus_group,locus_type,gene_family)
+    FROM '/home/flo/Schreibtisch/test_folder/gene.csv'
+    DELIMITER ','
+    CSV HEADER;
 
 COPY project(project_code,study,sra_study,project_id,study_pubmed_id,dbgap_study_accession)
     FROM '/home/flo/Schreibtisch/test_folder/project.csv'
@@ -42,87 +49,48 @@ COPY sample(run,sample_id,project_code,submitted_sample_id,icgc_specimen_id,subm
  Inserting into expression table, if data not already exists
 */
 
-COPY expression (sample_id,gene_id,fpkm,tpm,coverage,raw_count)
+COPY expression(sample_id,gene_id,fpkm,tpm,coverage,raw_count)
     FROM '/home/flo/Schreibtisch/test_folder/expression.csv'
     DELIMITER ','
     CSV HEADER;
 
-/*
- Inserting into expression table, if data not already exists
-*/
-
-COPY gene (gene_id,gene_name,reference,strand,gene_version,
-    gene_biotype,hgnc_id,symbol,locus_group,locus_type,gene_family)
-    FROM '/home/flo/Schreibtisch/test_folder/gene.csv'
-    DELIMITER ','
-    CSV HEADER;
 
 /*
  Inserting into expression table, if data not already exists
 */
 
-COPY countinfo (run,sum_counts,library_name,library_strategy,library_selection,library_source,library_layout)
+COPY countinfo(run,sum_counts,library_name,library_strategy,library_selection,library_source,library_layout)
     FROM '/home/flo/Schreibtisch/test_folder/countinfo.csv'
     DELIMITER ','
     CSV HEADER;
 
-CREATE TABLE sample_has_expression
-(
-    id  SERIAL PRIMARY KEY,
-    run VARCHAR(100)
-);
+/*
+ Inserting into pipeline table, if data not already exists
+*/
+
+COPY pipeline(nf_core_rnaseq,Nextflow,FastQC,Cutadapt,Trim_Galore,SortMeRNA,STAR,HISAT2,Picard_MarkDuplicates,
+    Samtools,featureCounts,Salmon,StringTie,Preseq,deepTools,RSeQC,dupRadar,edgeR,Qualimap,MultiQC)
+    FROM '/home/flo/Schreibtisch/test_folder/pipeline.csv'
+    DELIMITER ','
+    CSV HEADER;
+
+
 
 INSERT INTO sample_has_expression(run)
 SELECT DISTINCT e.sample_id
 FROM expression e;
 
 UPDATE expression
-SET id = she.id FROM sample_has_expression she
+SET run_id = she.run_id FROM sample_has_expression she
 WHERE she.run = expression.sample_id;
 
+
 UPDATE sample
-SET id = she.id FROM sample_has_expression she
+SET run_id = she.run_id FROM sample_has_expression she
 WHERE she.run = sample.run;
 
 UPDATE countinfo
-SET id = she.id FROM sample_has_expression she
+SET run_id = she.run_id FROM sample_has_expression she
 WHERE she.run = countinfo.run;
 
 
-/*
-DEFINING CONSTRAINTS
-*/
-ALTER TABLE donor
-    ADD CONSTRAINT project_donor
-        FOREIGN KEY (project_code)
-            REFERENCES project (project_code);
-
-ALTER TABLE sample
-    ADD CONSTRAINT donor_sample
-        FOREIGN KEY (donor_id)
-            REFERENCES donor (donor_id);
-
-ALTER TABLE sample
-    ADD CONSTRAINT sample_project
-        FOREIGN KEY (project_code)
-            REFERENCES project (project_code);
-
-ALTER TABLE expression
-    ADD CONSTRAINT gene_expression
-        FOREIGN KEY (gene_id)
-            REFERENCES gene (gene_id);
-
-ALTER TABLE expression
-ADD CONSTRAINT she_exp
-FOREIGN KEY (id)
-REFERENCES sample_has_expression (id);
-
-ALTER TABLE sample
-ADD CONSTRAINT she_sam
-FOREIGN KEY (id)
-REFERENCES sample_has_expression (id);
-
-ALTER TABLE countinfo
-ADD CONSTRAINT she_count
-FOREIGN KEY (id)
-REFERENCES sample_has_expression (id);
