@@ -6,7 +6,6 @@ import os
 import re
 import shutil
 import subprocess
-import sqlalchemy
 import sys
 import time
 import urllib.error
@@ -17,6 +16,7 @@ import dask.dataframe as dd
 import pandas as pd
 import pyranges as pr
 import requests
+import sqlalchemy
 
 
 @click.command()
@@ -70,6 +70,7 @@ def main(rnaseq, sra_file, dcc_manifest, metadata_dest, db_dest):
     DataProcessor.create_countinfo_table(project_db[3], rnaseq, db_dest)
     DataProcessor.create_pipeline_table(rnaseq, db_dest)
     print(time.time() - start)
+    SQLscripts.prepare_populate_script(db_dest)
 
 
 class Log:
@@ -416,7 +417,7 @@ class DataProcessor:
         for file in files:
             frame = pd.read_csv(file, sep='\t')
             frame = frame.drop(['Start', 'End'], axis=1)
-            #frame['Strand'] = frame['Strand'].astype('object')
+            # frame['Strand'] = frame['Strand'].astype('object')
             frame['sample_id'] = Helper.extract_sample_id(file.split('/')[-1])
             frame = frame.rename(
                 columns=ListDict.stringtie_dict)
@@ -562,6 +563,17 @@ class ListDict:
         sra_df_cols = json.load(sra_df)
         donor_db_list = json.load(donor_db)
         sample_db_list = json.load(sample_db)
+
+
+class SQLscripts:
+    @staticmethod
+    def prepare_populate_script(db_dest):
+        with open('postgresql_scripts/populate_tables_template.sql', 'r') as sql_file:
+            script = sql_file.read()
+
+        script = script.replace("$PATH$", str(db_dest))
+        with open('postgresql_scripts/populate_tables.sql', 'w') as file:
+            file.write(script)
 
 
 if __name__ == "__main__":
