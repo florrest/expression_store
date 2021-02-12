@@ -1,3 +1,4 @@
+import csv
 import glob
 import gzip
 import json
@@ -10,6 +11,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+import psycopg2
 
 import click
 import dask.dataframe as dd
@@ -17,6 +19,10 @@ import pandas as pd
 import pyranges as pr
 import requests
 import sqlalchemy
+from sqlalchemy import MetaData, create_engine
+from sqlalchemy.orm.session import sessionmaker
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy_utils import database_exists, create_database
 
 
 @click.command()
@@ -34,7 +40,14 @@ import sqlalchemy
               prompt='path where to store created csv files for database',
               help='path to metadata destination')
 def main(rnaseq, sra_file, dcc_manifest, metadata_dest, db_dest):
-    print(sqlalchemy.__version__)
+    #expression_df = dd.concat(DataProcessor.stringtie_results_out(os.path.join(rnaseq, 'results/stringtieFPKM/')))
+    #raw_count_df = DataProcessor.convert_countinfo(rnaseq)
+    #SQLAlchemy.process_expression(DataProcessor.create_expression_table(expression_df, raw_count_df, db_dest))
+
+    SQLAlchemy.process_expression_bulk_csv(db_dest)
+
+    #SQLAlchemy.process_expression_bulk_df(DataProcessor.create_expression_table(expression_df, raw_count_df, db_dest))
+    '''
     start = time.time()
 
     if dcc_manifest is not None:
@@ -71,7 +84,7 @@ def main(rnaseq, sra_file, dcc_manifest, metadata_dest, db_dest):
     DataProcessor.create_pipeline_table(rnaseq, db_dest)
     print(time.time() - start)
     SQLscripts.prepare_populate_script(db_dest)
-
+    '''
 
 class Log:
     # Create logger
@@ -448,7 +461,7 @@ class DataProcessor:
                                     'tpm', 'coverage']]
         expression = expression.groupby(['sample_id', 'gene_id']).sum().reset_index().compute()
         expression = pd.merge(expression, raw_count_df, on=['gene_id', 'sample_id'], how='left')
-        Helper.create_csv(expression, "expression", db_dest)
+        #Helper.create_csv(expression, "expression", db_dest)
         return expression
 
     @staticmethod
@@ -575,6 +588,100 @@ class SQLscripts:
         with open('postgresql_scripts/populate_tables.sql', 'w') as file:
             file.write(script)
 
+class SQLAlchemy:
+    @staticmethod
+    def process_expression_to_sql(expression_df):
+
+        engine = create_engine('postgresql+psycopg2://flo:test@localhost:5432/expression_store', echo=False)
+        if not database_exists(engine.url):
+            create_database(engine.url)
+        conn = engine.connect()
+        meta = MetaData()
+        start = time.time()
+        expression_df.to_sql('expression', conn, if_exists='replace', chunksize=5000, method='multi')
+        print(time.time()-start)
+        conn.close()
+    '''
+    student = sqlalchemy.Table(
+        'student', meta,
+        sqlalchemy.Column('id', sqlalchemy.Integer, primary_key=True)
+    )
+    meta.create_all(engine)
+    '''
+
+    @staticmethod
+    def process_expression_bulk_csv(db_dest):
+        Base = declarative_base()
+        class Expression(Base):
+            __tablename__ = 'expression'
+            sample_id = sqlalchemy.Column(sqlalchemy.String, primary_key=True)
+            gene_id = sqlalchemy.Column(sqlalchemy.String, primary_key=True)
+            fpkm = sqlalchemy.Column(sqlalchemy.FLOAT)
+            tpm = sqlalchemy.Column(sqlalchemy.FLOAT)
+            coverage = sqlalchemy.Column(sqlalchemy.FLOAT)
+            raw_count = sqlalchemy.Column(sqlalchemy.BIGINT)
+
+
+        conn_string = 'postgresql+psycopg2://flo:test@localhost:5432/expression_store'
+        engine = create_engine(conn_string)
+        Base.metadata.create_all(engine)
+        Session = sessionmaker(bind=engine)
+        session = Session()
+
+        start = time.time()
+        with open(os.path.join(db_dest, 'expression.csv'), 'r') as csv_file:
+            next(csv_file)
+            csv_reader = csv.reader(csv_file)
+            buffer = []
+            for row in csv_reader:
+                buffer.append({
+                    'sample_id': row[0],
+                    'gene_id': row[1],
+                    'fpkm': row[2],
+                    'tpm': row[3],
+                    'coverage': row[4],
+                    'raw_count': row[5]
+                })
+                if len(buffer) % 20000 == 0:
+                    session.bulk_insert_mappings(Expression, buffer)
+                    buffer = []
+
+            session.bulk_insert_mappings(Expression, buffer)
+            session.commit()
+            session.close()
+        print(time.time() - start)
+
+
+    @staticmethod
+    def process_expression_bulk_df(expression_df):
+        Base = declarative_base()
+        class Expression(Base):
+            __tablename__ = 'expression'
+            sample_id = sqlalchemy.Column(sqlalchemy.String, primary_key=True)
+            gene_id = sqlalchemy.Column(sqlalchemy.String, primary_key=True)
+            fpkm = sqlalchemy.Column(sqlalchemy.FLOAT)
+            tpm = sqlalchemy.Column(sqlalchemy.FLOAT)
+            coverage = sqlalchemy.Column(sqlalchemy.FLOAT)
+            raw_count = sqlalchemy.Column(sqlalchemy.BIGINT)
+
+
+        conn_string = 'postgresql+psycopg2://flo:test@localhost:5432/expression_store'
+        engine = create_engine(conn_string)
+        Base.metadata.create_all(engine)
+        conn = engine.connect()
+
+        start = time.time()
+        df_to_write = expression_df.to_dict(orient='records')
+        metadata = sqlalchemy.schema.MetaData(bind=engine, reflect=True)
+        table = sqlalchemy.Table('expression', metadata, autoload=True)
+        Session = sessionmaker(bind=engine)
+        session = Session()
+        conn.execute(table.insert(), df_to_write)
+
+        session.commit()
+        session.close()
+
+        print(time.time() - start)
 
 if __name__ == "__main__":
     sys.exit(main())
