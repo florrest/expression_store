@@ -114,8 +114,7 @@ CREATE TABLE expression
     fpkm          REAL,
     tpm           REAL,
     coverage      REAL,
-    raw_count     INTEGER,
-    PRIMARY KEY (run, gene_id)
+    raw_count     INTEGER
 );
 
 CREATE TABLE gene

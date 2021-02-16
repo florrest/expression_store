@@ -107,6 +107,8 @@ UPDATE countinfo
 SET run_id = she.run_id FROM sample_has_expression she
 WHERE she.run = countinfo.run;
 
+ALTER TABLE expression
+    ADD PRIMARY KEY (run_id, gene_index_id);
 
 
 
