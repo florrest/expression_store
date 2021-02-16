@@ -7,5 +7,9 @@ dependencies:
   - conda-forge::dask
   - conda-forge::click
   - conda-forge::sqlalchemy
+  - conda-forge::sqlalchemy-utils
+  - conda-forge::psycopg2
+  - conda-forge::pyodbc
+  - conda-forge::pg8000
   - conda-forge::requests
   - bioconda::pyranges

@@ -12,6 +12,7 @@ import time
 import urllib.error
 import urllib.request
 import psycopg2
+import pg8000
 
 import click
 import dask.dataframe as dd
@@ -33,38 +34,46 @@ from sqlalchemy_utils import database_exists, create_database
               help='path to SRA accession list')
 @click.option('--dcc_manifest',
               help='path to ICGC DCC manifest.tsv')
+@click.option('--gdc_manifest',
+              help='path to GDC manifest.tsv')
 @click.option('--metadata_dest',
               prompt='path to download destination of metadata',
               help='path to metadata destination')
 @click.option('--db_dest',
               prompt='path where to store created csv files for database',
               help='path to metadata destination')
-def main(rnaseq, sra_file, dcc_manifest, metadata_dest, db_dest):
+def main(rnaseq, sra_file, dcc_manifest, gdc_manifest, metadata_dest, db_dest):
     #expression_df = dd.concat(DataProcessor.stringtie_results_out(os.path.join(rnaseq, 'results/stringtieFPKM/')))
     #raw_count_df = DataProcessor.convert_countinfo(rnaseq)
     #SQLAlchemy.process_expression(DataProcessor.create_expression_table(expression_df, raw_count_df, db_dest))
 
-    SQLAlchemy.process_expression_bulk_csv(db_dest)
+    #SQLAlchemy.process_expression_bulk_csv(db_dest)
 
     #SQLAlchemy.process_expression_bulk_df(DataProcessor.create_expression_table(expression_df, raw_count_df, db_dest))
-    '''
+    #gdc_uuid_list = Helper.get_gdc_filename_list(rnaseq)
+    #Downloader.download_gdc_file_metadata(gdc_uuid_list, metadata_dest)
+    #DataProcessor.concat_gdc_meta(os.path.join(metadata_dest, 'gdc/'))
+    #Downloader.download_gdc_file_test()
+
     start = time.time()
 
     if dcc_manifest is not None:
-        Log.logger.info('Filter Projects and download metadata from ICGC DCC')
         Downloader.download_icgc_project_metadata(Helper.get_icgc_project_list(dcc_manifest), metadata_dest)
         Helper.gunzip_files(os.path.join(metadata_dest, "icgc"))
     else:
         Log.logger.info("No ICGC DCC manifest file provided. SKIPPING")
 
     if sra_file is not None:
-        Log.logger.info('Download Metadata from Sequence Read Archive (SRA)')
         Downloader.download_sra_metadata(Helper.get_sra_accession_list(sra_file), metadata_dest)
     else:
         Log.logger.info("No SRA accession list provided. SKIPPING")
 
+    if gdc_manifest is not None:
+        Downloader.download_gdc_file_metadata(Helper.get_gdc_filename_list(gdc_manifest), metadata_dest)
+    else:
+        Log.logger.info("No GDC manifest provided. SKIPPING")
     # logger.info('Download Metadata from GDC')
-    # gdc_uuid_list = get_gdc_uuid_list(inpath)
+    # gdc_uuid_list = get_gdc_filename_list(inpath)
     # download_gdc_metadata(gdc_uuid_list, inpath)
 
     Log.logger.info('Creating CSV to load into database')
@@ -78,13 +87,14 @@ def main(rnaseq, sra_file, dcc_manifest, metadata_dest, db_dest):
     project_db = DataProcessor.create_project_layer_tables(
         DataProcessor.concat_sra_meta(os.path.join(metadata_dest, "sra"), Helper.get_sra_accession_list(sra_file)),
         DataProcessor.join_icgc_meta(DataProcessor.concat_icgc_meta(os.path.join(rnaseq, "metadata/icgc")), rnaseq),
+        DataProcessor.concat_gdc_meta(os.path.join(metadata_dest, 'gdc/')),
         db_dest)
 
     DataProcessor.create_countinfo_table(project_db[3], rnaseq, db_dest)
     DataProcessor.create_pipeline_table(rnaseq, db_dest)
     print(time.time() - start)
-    SQLscripts.prepare_populate_script(db_dest)
-    '''
+    #SQLscripts.prepare_populate_script(db_dest)
+
 
 class Log:
     # Create logger
@@ -186,17 +196,10 @@ class Helper:
 
     # returns list of gdc uuids from given gdc manifest file
     @staticmethod
-    def get_gdc_uuid_list(inpath):
-        uuids = pd.DataFrame()
-        gdc_files = []
+    def get_gdc_filename_list(inpath):
         try:
-            os.chdir(inpath)
-            for i in os.listdir(inpath):
-                if os.path.isfile(os.path.join(inpath, i)) and "gdc_manifest" in i:
-                    gdc_files.append(i)
-
-            uuids = pd.concat((pd.read_csv(txt, sep='\t') for txt in gdc_files))
-            uuids = uuids['id'].unique().tolist()
+            uuids = pd.read_csv(inpath, sep='\t', usecols=['filename'])
+            uuids = uuids['filename'].unique().tolist()
         except:
             Log.logger.warning('GDC Manifest does not exist. Check path to manifest.')
         return uuids
@@ -213,16 +216,22 @@ class Downloader:
             downloaded_files = [os.path.basename(x).split('.')[0] for x in
                                 glob.glob(os.path.join(metadata_dest, 'sra/', '*.csv'))]
             project_lst = [file for file in project_lst if file not in downloaded_files]
-        for i in project_lst:
-            sra_url = 'http://trace.ncbi.nlm.nih.gov/Traces/sra/' \
-                      'sra.cgi?save=efetch&db=sra&rettype=runinfo&term={}'.format(i)
-            Helper.retrieve_data(sra_url, os.path.join(metadata_dest, 'sra/') + str(i) + '.csv')
+
+        if len(project_lst) > 0:
+            Log.logger.info('Download Metadata from Sequence Read Archive (SRA)')
+            for i in project_lst:
+                sra_url = 'http://trace.ncbi.nlm.nih.gov/Traces/sra/' \
+                          'sra.cgi?save=efetch&db=sra&rettype=runinfo&term={}'.format(i)
+                Helper.retrieve_data(sra_url, os.path.join(metadata_dest, 'sra/') + str(i) + '.csv')
+        else:
+            Log.logger.info('Metadata from Sequence Read Archive (SRA) already exists')
 
     # download sample, specimen, donor and donor_set metadata from ICGC DCC based on project code
     @staticmethod
     def download_icgc_project_metadata(project_lst, metadata_dest):
         if not os.path.exists(os.path.join(metadata_dest, 'icgc/')):
             os.makedirs(os.path.join(metadata_dest, 'icgc/'))
+
         for i in project_lst:
             sample_url = 'https://dcc.icgc.org/api/v1/' \
                          'download?fn=/current/Projects/{}/sample.{}.tsv.gz'.format(i, i)
@@ -236,76 +245,91 @@ class Downloader:
 
             if os.path.isfile(os.path.join(metadata_dest, 'icgc/sample_' + str(i) + '.tsv.gz')) \
                     or os.path.isfile(os.path.join(metadata_dest, 'icgc/sample_' + str(i) + '.tsv')):
-                Log.logger.info("sample metadata for {} already exists".format(i))
+                continue
             else:
                 Helper.retrieve_data(sample_url, metadata_dest + '/icgc/sample_' + str(i) + '.tsv.gz')
-
             if os.path.isfile(os.path.join(metadata_dest, 'icgc/donor_' + str(i) + '.tsv.gz')) \
                     or os.path.isfile(os.path.join(metadata_dest, 'icgc/donor_' + str(i) + '.tsv')):
-                Log.logger.info("donor metadata for {} already exists".format(i))
+                continue
             else:
                 Helper.retrieve_data(donor_url, metadata_dest + '/icgc/donor_' + str(i) + '.tsv.gz')
-
             if os.path.isfile(os.path.join(metadata_dest, 'icgc/specimen_' + str(i) + '.tsv.gz')) \
                     or os.path.isfile(os.path.join(metadata_dest, 'icgc/specimen_' + str(i) + '.tsv')):
-                Log.logger.info("specimen metadata for {} already exists".format(i))
+                continue
             else:
                 Helper.retrieve_data(specimen_url, metadata_dest + '/icgc/specimen_' + str(i) + '.tsv.gz')
-
             if os.path.isfile(os.path.join(metadata_dest, 'icgc/repository_' + str(i) + '.tsv')):
-                Log.logger.info("repository metadata for {} already exists".format(i))
+                continue
             else:
                 Helper.retrieve_data(donor_set_url, metadata_dest + '/icgc/repository_' + str(i) + '.tsv')
 
-    # UNDER CONSTRUCTION
     @staticmethod
-    def download_gdc_metadata(id_lst, inpath):
-        if not os.path.exists(os.path.join(inpath, 'metadata/gdc/')):
-            os.makedirs(os.path.join(inpath, 'metadata/gdc/'))
-        for i in id_lst:
-            url = 'https://api.gdc.cancer.gov/cases/' + str(i) + '?fields=submitter_id?pretty=true&format=TSV'
-            Helper.retrieve_data(url, inpath + '/test/' + str(i) + '_sample.tsv')
+    def download_gdc_file_metadata(gdc_uuid_list, metadata_dest):
+        if not os.path.exists(os.path.join(metadata_dest, 'gdc/')):
+            os.makedirs(os.path.join(metadata_dest, 'gdc/'))
+        downloaded_files = [os.path.basename(x).split('.')[0] for x in
+                            glob.glob(os.path.join(metadata_dest, 'gdc/', '*.csv'))]
+        blacklist = re.compile('|'.join([re.escape(word) for word in downloaded_files]))
+        missing = [file for file in gdc_uuid_list if not blacklist.search(file)] # REMOVE DOWNLOADED UUIDS
 
-    # UNDER CONSTRUCTION
-    @staticmethod
-    def download_gdc_metadata_test():
-        fields = [
-            "submitter_id",
-            "disease_type",
-            "project.name",
-            "project.program.dbgap_accession_number",
-            "project.primary_site",
-            "demographic.ethnicity",
-            "demographic.gender",
-            "diagnoses.primary_diagnosis",
-        ]
-        fields = ",".join(fields)
-        files_endpt = "https://api.gdc.cancer.gov/cases"
-        # This set of filters is nested under an 'and' operator.
-        filters = {
-            "op": "and",
-            "content": [
-                {
+        if len(missing) > 0:
+            Log.logger.info('Download Metadata from GDC')
+            cases_endpt = 'https://api.gdc.cancer.gov/files'
+            for i in missing:
+                # The 'fields' parameter is passed as a comma-separated string of single names.
+                fields = [
+                    "access",
+                    "experimental_strategy",
+                    "platform",
+                    "type",
+                    "cases.demographic.gender",
+                    "cases.diagnoses.primary_diagnosis",
+                    "cases.diagnoses.tumor_grade",
+                    "cases.diagnoses.tumor_stage",
+                    "cases.diagnoses.vital_status",
+                    "cases.diagnoses.age_at_diagnosis",
+                    "cases.project.dbgap_accession_number",
+                    "cases.project.disease_type",
+                    "cases.project.primary_site",
+                    "cases.project.project_id",
+                    "cases.samples.sample_id",
+                    "cases.samples.sample_type",
+                    "cases.submitter_id",
+                    "cases.diagnoses.last_known_disease_status",
+                    "cases.diagnoses.prior_malignancy",
+                    "cases.diagnoses.classification_of_tumor",
+                    "cases.samples.tumor_code",
+                    "cases.samples.tumor_code_id",
+                    "cases.samples.tumor_descriptor",
+                    "cases.samples.preservation_method",
+                    "cases.samples.sample_type",
+                    "cases.samples.tissue_type",
+                    "cases.samples.tumor_code",
+                    "cases.samples.tumor_code_id",
+                ]
+
+                fields = ','.join(fields)
+                filters = {
                     "op": "in",
                     "content": {
-                        "field": "files.md5sum",
-                        "value": ["047ec3e3782726d19f73eef83736f84b"]
+                        "field": "file_name",
+                        "value": [str(i)]
                     }
                 }
-            ]
-        }
-        params = {
-            "filters": filters,
-            "fields": fields,
-            "format": "TSV",
-            "size": "2000"
-        }
 
-        # The parameters are passed to 'json' rather than 'params' in this case
-        response = requests.post(files_endpt, headers={"Content-Type": "application/json"}, json=params)
+                params = {
+                    "filters": json.dumps(filters),
+                    "fields": fields,
+                    "format": "CSV",
+                    "size": "100"
+                }
 
-        print(response.content.decode("utf-8"))
-
+                response = requests.get(cases_endpt, params=params)
+                with open(os.path.join(metadata_dest,"gdc/" "{}.csv".format(str(i).split('_')[0])), "wb") as csv_file:
+                    csv_file.write(response.content)
+            else:
+                Log.logger.info('Metadata from GDC already downloaded')
+                    
     # download and process ensembl metadata, so it just returns relevant gene entries
     @staticmethod
     def download_and_process_ensembl_metadata(inpath):
@@ -363,6 +387,7 @@ class DataProcessor:
         frame = pd.concat(sra_files_list, axis=0)
         frame = frame[frame['Run'].isin(used_accessions)]
         frame = frame.rename(columns=ListDict.sra_col_dict)
+        frame['portal'] = "SRA"
         return frame
 
     # concat metadata from downloaded ICGC DCC metadata files
@@ -395,6 +420,23 @@ class DataProcessor:
         else:
             return icgc_donor, icgc_sample, icgc_specimen, icgc_repository
 
+    @staticmethod
+    def concat_gdc_meta(inpath_gdc_meta):
+        try:
+            gdc_csv_files = glob.glob(inpath_gdc_meta + "/*.csv")
+            gdc_meta = []
+            for file in gdc_csv_files:
+                df = pd.read_csv(file, sep=',')
+                gdc_meta.append(df)
+            gdc_meta_df = pd.concat(gdc_meta)
+            gdc_meta_df = gdc_meta_df.rename(columns=ListDict.gdc_col_dict)
+            gdc_meta_df['portal'] = 'GDC'
+            return gdc_meta_df
+        except:
+            gdc_meta_df = pd.DataFrame(columns=ListDict.gdc_col_dict)
+            return gdc_meta_df
+
+
     # join and return dataframes containing metadata about ICGC DCC sequences
     @staticmethod
     def join_icgc_meta(df, base_path):
@@ -414,6 +456,7 @@ class DataProcessor:
                                  on=['icgc_specimen_id', 'icgc_donor_id', 'project_code', 'submitted_donor_id',
                                      'submitted_specimen_id', 'percentage_cellularity', 'level_of_cellularity'],
                                  how='left')
+
         except:
             Log.logger.info('No ICGC DCC Manifest provided')
             merge_rep_man = pd.DataFrame(columns=ListDict.rep_man_cols)
@@ -431,7 +474,9 @@ class DataProcessor:
             frame = pd.read_csv(file, sep='\t')
             frame = frame.drop(['Start', 'End'], axis=1)
             # frame['Strand'] = frame['Strand'].astype('object')
-            frame['sample_id'] = Helper.extract_sample_id(file.split('/')[-1])
+            frame['run'] = Helper.extract_sample_id(file.split('/')[-1])
+            frame['run'] = frame['run'].map(lambda x: re.sub(r"-R1", "", x))
+            frame['run'] = frame['run'].map(lambda x: re.sub(r"-R2", "", x))
             frame = frame.rename(
                 columns=ListDict.stringtie_dict)
             dd_frame = dd.from_pandas(frame, npartitions=2)
@@ -453,19 +498,18 @@ class DataProcessor:
                         right_on='symbol',
                         how='left')
         Helper.create_csv(gene, 'gene', db_dest)
-        return gene
 
     @staticmethod
     def create_expression_table(expression_df, raw_count_df, db_dest):
-        expression = expression_df[['sample_id', 'gene_id', 'fpkm',
+        expression = expression_df[['run', 'gene_id', 'fpkm',
                                     'tpm', 'coverage']]
-        expression = expression.groupby(['sample_id', 'gene_id']).sum().reset_index().compute()
-        expression = pd.merge(expression, raw_count_df, on=['gene_id', 'sample_id'], how='left')
-        #Helper.create_csv(expression, "expression", db_dest)
-        return expression
+        expression = expression.groupby(['run', 'gene_id']).sum().reset_index().compute()
+        expression = pd.merge(expression, raw_count_df, on=['gene_id', 'run'], how='left')
+        Helper.create_csv(expression, "expression", db_dest)
+
 
     @staticmethod
-    def create_project_layer_tables(sra_meta_df, icgc_meta_df, db_dest):
+    def create_project_layer_tables(sra_meta_df, icgc_meta_df, gdc_meta_df, db_dest):
         try:
             sra = sra_meta_df.rename(columns=ListDict.database_columns)
         except:
@@ -474,15 +518,17 @@ class DataProcessor:
         donor = icgc_meta_df[1].rename(columns=ListDict.database_columns)
         sample = icgc_meta_df[2].rename(columns=ListDict.database_columns)
 
+
         merged_sample_donor = pd.merge(sample, donor, on=['donor_id', 'project_code', 'submitted_donor_id'], how='left')
         final_merge = pd.merge(merged_sample_donor, rep_man,
                                on=['donor_id', 'icgc_specimen_id', 'project_code', 'specimen_type', 'sample_id'],
                                how='right')
-
+        final_merge['portal'] = 'ICGC DCC'
         concat_meta = pd.concat([final_merge, sra], axis=0)
+        concat_meta = pd.concat([concat_meta, gdc_meta_df], axis=0)
 
-        project_db = concat_meta[['project_code', 'study', 'sra_study', 'project_id',
-                                  'study_pubmed_id', 'dbgap_study_accession']]
+        project_db = concat_meta[['project_code', 'study', 'sra_study',
+                                  'dbgap_study_accession']]
         project_db = project_db.drop_duplicates()
 
         donor_db = concat_meta[ListDict.donor_db_list]
@@ -515,6 +561,8 @@ class DataProcessor:
                 'index': 'run',
                 0: 'sum_counts'})
         countinfo['run'] = countinfo['run'].apply(lambda x: Helper.extract_sample_id(x))
+        countinfo['run'] = countinfo['run'].map(lambda x: re.sub(r"-R1", "", x))
+        countinfo['run'] = countinfo['run'].map(lambda x: re.sub(r"-R2", "", x))
         countinfo = pd.merge(countinfo,
                              df[['run', 'library_name', 'library_strategy',
                                  'library_selection', 'library_source', 'library_layout']],
@@ -534,7 +582,6 @@ class DataProcessor:
                                             'Picard MarkDuplicates': 'Picard_MarkDuplicates',
                                             'nf-core/rnaseq': 'nf_core_rnaseq'})
         Helper.create_csv(pipeline, "pipeline", db_dest)
-        return pipeline
 
     @staticmethod
     def convert_countinfo(rnaseq):
@@ -543,8 +590,11 @@ class DataProcessor:
         df = df.drop(['gene_name'], axis=1).set_index(['Geneid'])
         df = df.stack().to_frame().reset_index()
         df = df.rename(columns={'Geneid': 'gene_id',
-                                'level_1': 'sample_id',
+                                'level_1': 'run',
                                 0: 'raw_count'})
+        df['run'] = df['run'].map(lambda x: re.sub(r"-R1","", x))
+        df['run'] = df['run'].map(lambda x: re.sub(r"-R2", "", x))
+
         return df
 
 
@@ -555,12 +605,14 @@ class ListDict:
             open('dicts_lists/icgc_rep_dict.json', 'r') as icgc_col_names, \
             open('dicts_lists/column_db_dict.json', 'r') as db_col, \
             open('dicts_lists/icgc_tissue_dict.json', 'r') as icgc_tissue, \
-            open('dicts_lists/stringtie_out_dict.json', 'r') as stringtie_dict:
+            open('dicts_lists/stringtie_out_dict.json', 'r') as stringtie_dict, \
+            open('dicts_lists/gdc_col_dict.json', 'r') as gdc_cols:
         sra_col_dict = json.load(sra_col)
         icgc_col_names_repository = json.load(icgc_col_names)
         database_columns = json.load(db_col)
         icgc_tissue_dict = json.load(icgc_tissue)
         stringtie_dict = json.load(stringtie_dict)
+        gdc_col_dict = json.load(gdc_cols)
 
     # Database columns
     with \
@@ -588,6 +640,7 @@ class SQLscripts:
         with open('postgresql_scripts/populate_tables.sql', 'w') as file:
             file.write(script)
 
+
 class SQLAlchemy:
     @staticmethod
     def process_expression_to_sql(expression_df):
@@ -601,13 +654,6 @@ class SQLAlchemy:
         expression_df.to_sql('expression', conn, if_exists='replace', chunksize=5000, method='multi')
         print(time.time()-start)
         conn.close()
-    '''
-    student = sqlalchemy.Table(
-        'student', meta,
-        sqlalchemy.Column('id', sqlalchemy.Integer, primary_key=True)
-    )
-    meta.create_all(engine)
-    '''
 
     @staticmethod
     def process_expression_bulk_csv(db_dest):
@@ -622,7 +668,7 @@ class SQLAlchemy:
             raw_count = sqlalchemy.Column(sqlalchemy.BIGINT)
 
 
-        conn_string = 'postgresql+psycopg2://flo:test@localhost:5432/expression_store'
+        conn_string = "postgresql+psycopg2://flo:test@localhost:5432/expression_store"
         engine = create_engine(conn_string)
         Base.metadata.create_all(engine)
         Session = sessionmaker(bind=engine)
@@ -642,7 +688,7 @@ class SQLAlchemy:
                     'coverage': row[4],
                     'raw_count': row[5]
                 })
-                if len(buffer) % 20000 == 0:
+                if len(buffer) % 100000 == 0:
                     session.bulk_insert_mappings(Expression, buffer)
                     buffer = []
 
@@ -670,13 +716,15 @@ class SQLAlchemy:
         Base.metadata.create_all(engine)
         conn = engine.connect()
 
-        start = time.time()
+
         df_to_write = expression_df.to_dict(orient='records')
         metadata = sqlalchemy.schema.MetaData(bind=engine, reflect=True)
-        table = sqlalchemy.Table('expression', metadata, autoload=True)
+        #table = sqlalchemy.Table('expression', metadata, autoload=True)
         Session = sessionmaker(bind=engine)
         session = Session()
-        conn.execute(table.insert(), df_to_write)
+        start = time.time()
+        session.bulk_insert_mappings(Expression, df_to_write)
+        #conn.execute(table.insert(), df_to_write)
 
         session.commit()
         session.close()
