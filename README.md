@@ -33,6 +33,10 @@ conda activate expression-store
 
 ## Running database_preprocessor.py
 
+### Run the script
+
+```database_preprocessor.py --rnaseq <> --sra_file <> --dcc_manifest <> --metadata_dest <> --db_dest <>```
+
 ### Script Parameters
 
 - Provide Path to output directory of nf-core/rnaseq
@@ -54,6 +58,22 @@ conda activate expression-store
 - Provide Path to your desired database directory, where the csv-files will be stored. These can be loaded into the database later.
 
 ```--db_dest <absolute path to your desired output directory>```
+
+
+
+### Output
+
+The script creates csv-files, which contain all necessary files for:
+
+- Project 
+- Donor
+- Sample
+- Expression
+- Countinfo
+- Gene
+- Pipeline
+
+Additionally the script processes the ````populate_sql_template.sql``` script, and replaces the given ```db_dest``` directory in the template file.
 
 
 
@@ -84,11 +104,32 @@ sudo postgresql-setup initdb
 sudo systemctl start postgresql ; sudo systemctl enable postgresql
 ```
 
-## Basic Setup for PostgreSQL
+## Running SQL-Scripts
 
-Change password of automatically generated "postgres" user (in our usecase I set it to **expression**)
+1. Change to your postgres user. E.g.:
 
-```
-sudo passwd postgres
-```
+   ```
+   sudo su postgres
+   ```
 
+2. Navigate to the ```postgresql_scripts``` directory and run:
+
+   ```
+   psql -f create_expression_store_db.sql
+   ```
+
+   followed by
+
+   ```
+   psql -f populate_tables.sql
+   ```
+
+3. Now you can run ```psql```
+
+4. Connect to the expression_store database:
+
+   ```
+   \connect expression_store
+   ```
+
+5. Once you are connected, you can run your own SQL-queries to retrieve data.
