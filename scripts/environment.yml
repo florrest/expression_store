@@ -5,11 +5,7 @@ channels:
 dependencies:
   - conda-forge::python=3.7.3
   - conda-forge::dask
-  - conda-forge::click
-  - conda-forge::sqlalchemy
-  - conda-forge::sqlalchemy-utils
-  - conda-forge::psycopg2
-  - conda-forge::pyodbc
-  - conda-forge::pg8000
   - conda-forge::requests
+  - conda-forge::sphinx
+  - conda-forge::sphinx_rtd_theme
   - bioconda::pyranges
