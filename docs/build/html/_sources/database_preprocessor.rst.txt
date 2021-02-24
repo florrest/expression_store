@@ -6,6 +6,4 @@ Documentation
    :undoc-members:
    :show-inheritance:
 
-.. autofunction:: database_preprocessor.Helper.gunzip_files
-   :noindex:
 
