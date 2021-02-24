@@ -11,7 +11,6 @@ Welcome to Expression Store's documentation!
    :caption: Contents:
 
    modules
-   database_preprocessor
 
 Indices and tables
 ==================
