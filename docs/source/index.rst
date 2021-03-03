@@ -10,7 +10,7 @@ Welcome to Expression Store's documentation!
    :maxdepth: 2
    :caption: Contents:
 
-database_preprocessor
+   database_preprocessor
 
 Indices and tables
 ==================
