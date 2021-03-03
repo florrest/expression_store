@@ -1,0 +1,965 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  
+  <title>database_preprocessor &mdash; Expression Store 0.1 documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+
+  
+  
+
+  
+  
+
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/underscore.js"></script>
+        <script src="../_static/doctools.js"></script>
+    
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../index.html" class="icon icon-home"> Expression Store
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <!-- Local TOC -->
+              <div class="local-toc"></div>
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">Expression Store</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html" class="icon icon-home"></a> &raquo;</li>
+        
+          <li><a href="index.html">Module code</a> &raquo;</li>
+        
+      <li>database_preprocessor</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for database_preprocessor</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">argparse</span>
+<span class="kn">import</span> <span class="nn">glob</span>
+<span class="kn">import</span> <span class="nn">gzip</span>
+<span class="kn">import</span> <span class="nn">json</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">shutil</span>
+<span class="kn">import</span> <span class="nn">subprocess</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">urllib.error</span>
+<span class="kn">import</span> <span class="nn">urllib.request</span>
+<span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
+
+<span class="kn">import</span> <span class="nn">dask.dataframe</span> <span class="k">as</span> <span class="nn">dd</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="kn">import</span> <span class="nn">pyranges</span> <span class="k">as</span> <span class="nn">pr</span>
+<span class="kn">import</span> <span class="nn">requests</span>
+<span class="kn">from</span> <span class="nn">dask.diagnostics</span> <span class="kn">import</span> <span class="n">ProgressBar</span>
+
+<span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">(</span><span class="n">description</span><span class="o">=</span><span class="s1">&#39;Database Preprocessor for expression_store&#39;</span><span class="p">)</span>
+<span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;--rnaseq&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span>
+                    <span class="n">help</span><span class="o">=</span><span class="s1">&#39;Path to base directory of nf-core/rnaseq&#39;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;--sra_file&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span>
+                    <span class="n">help</span><span class="o">=</span><span class="s1">&#39;Path to SRA accession txt file&#39;</span><span class="p">)</span>
+<span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;--dcc_manifest&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span>
+                    <span class="n">help</span><span class="o">=</span><span class="s1">&#39;Path to ICGC DCC manifest tsv file&#39;</span><span class="p">)</span>
+<span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;--gdc_manifest&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span>
+                    <span class="n">help</span><span class="o">=</span><span class="s1">&#39;Path to GDC manifest tsv file&#39;</span><span class="p">)</span>
+<span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;--metadata_dest&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span>
+                    <span class="n">help</span><span class="o">=</span><span class="s1">&#39;Path to directory, where metadata should be downloaded to&#39;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;--db_dest&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span>
+                    <span class="n">help</span><span class="o">=</span><span class="s1">&#39;Path to directory, where csv files for database should be stored&#39;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">main</span><span class="p">():</span>
+    <span class="sd">&quot;&quot;&quot; This is the main class, which performs all necessary steps to successfully download, process and export metadata</span>
+<span class="sd">    and data for the database</span>
+
+<span class="sd">    :param rnaseq: Path to the base directory of nf-core/rnaseq</span>
+<span class="sd">    :param sra_file: Path to the SRA accession list txt-file</span>
+<span class="sd">    :param dcc_manifest: Path to the manifest file of ICGC DCC</span>
+<span class="sd">    :param gdc_manifest: Path to the manifest file of GDC</span>
+<span class="sd">    :param metadata_dest: Path to a previously created directory, to store downloaded metadata</span>
+<span class="sd">    :param db_dest: Path to the destination directory of the created csv-files, which are imported to the database</span>
+<span class="sd">    :return: None</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">args</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+    <span class="n">rnaseq</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">rnaseq</span>
+    <span class="n">sra_file</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">sra_file</span>
+    <span class="n">dcc_manifest</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">dcc_manifest</span>
+    <span class="n">gdc_manifest</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">gdc_manifest</span>
+    <span class="n">metadata_dest</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">metadata_dest</span>
+    <span class="n">db_dest</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">db_dest</span>
+
+    <span class="n">Log</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Downloading Data&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">dcc_manifest</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">Downloader</span><span class="o">.</span><span class="n">download_icgc_project_metadata</span><span class="p">(</span><span class="n">Helper</span><span class="o">.</span><span class="n">get_icgc_project_list</span><span class="p">(</span><span class="n">dcc_manifest</span><span class="p">),</span> <span class="n">metadata_dest</span><span class="p">)</span>
+        <span class="n">Helper</span><span class="o">.</span><span class="n">gunzip_files</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">metadata_dest</span><span class="p">,</span> <span class="s2">&quot;icgc&quot;</span><span class="p">))</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">Log</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;No ICGC DCC manifest file provided or Metadata already downloaded. SKIPPING&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">sra_file</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">Downloader</span><span class="o">.</span><span class="n">download_sra_metadata</span><span class="p">(</span><span class="n">Helper</span><span class="o">.</span><span class="n">get_sra_accession_list</span><span class="p">(</span><span class="n">sra_file</span><span class="p">),</span> <span class="n">metadata_dest</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">Log</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;No SRA accession list provided or Metadata already downloaded. SKIPPING&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">gdc_manifest</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">Downloader</span><span class="o">.</span><span class="n">download_gdc_file_metadata</span><span class="p">(</span><span class="n">Helper</span><span class="o">.</span><span class="n">get_gdc_filename_list</span><span class="p">(</span><span class="n">gdc_manifest</span><span class="p">),</span> <span class="n">metadata_dest</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">Log</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;No GDC manifest provided or Metadata already downloaded. SKIPPING&quot;</span><span class="p">)</span>
+
+    <span class="n">Downloader</span><span class="o">.</span><span class="n">download_ensembl_metadata</span><span class="p">(</span><span class="n">metadata_dest</span><span class="p">)</span>
+    <span class="n">Downloader</span><span class="o">.</span><span class="n">download_hgnc</span><span class="p">(</span><span class="n">metadata_dest</span><span class="p">)</span>
+
+    <span class="n">Log</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Creating ProjectLayer csv files&quot;</span><span class="p">)</span>
+    <span class="n">project_db</span> <span class="o">=</span> <span class="n">DataProcessor</span><span class="o">.</span><span class="n">create_project_layer_tables</span><span class="p">(</span>
+        <span class="n">DataProcessor</span><span class="o">.</span><span class="n">concat_sra_meta</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">metadata_dest</span><span class="p">,</span> <span class="s2">&quot;sra&quot;</span><span class="p">),</span> <span class="n">Helper</span><span class="o">.</span><span class="n">get_sra_accession_list</span><span class="p">(</span><span class="n">sra_file</span><span class="p">)),</span>
+        <span class="n">DataProcessor</span><span class="o">.</span><span class="n">concat_icgc_meta</span><span class="p">(</span><span class="n">metadata_dest</span><span class="p">,</span> <span class="n">dcc_manifest</span><span class="p">),</span>
+        <span class="n">DataProcessor</span><span class="o">.</span><span class="n">concat_gdc_meta</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">metadata_dest</span><span class="p">,</span> <span class="s1">&#39;gdc/&#39;</span><span class="p">)),</span>
+        <span class="n">db_dest</span><span class="p">)</span>
+
+    <span class="n">Log</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Creating ExpressionLayer csv files&quot;</span><span class="p">)</span>
+    <span class="n">raw_count_df</span> <span class="o">=</span> <span class="n">DataProcessor</span><span class="o">.</span><span class="n">create_countinfo_raw_count_table</span><span class="p">(</span><span class="n">project_db</span><span class="p">[</span><span class="mi">3</span><span class="p">],</span> <span class="n">rnaseq</span><span class="p">,</span> <span class="n">db_dest</span><span class="p">)</span>
+
+    <span class="n">expression_df</span> <span class="o">=</span> <span class="n">dd</span><span class="o">.</span><span class="n">concat</span><span class="p">(</span><span class="n">DataProcessor</span><span class="o">.</span><span class="n">stringtie_results_out</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">rnaseq</span><span class="p">,</span> <span class="s1">&#39;results/stringtieFPKM/&#39;</span><span class="p">)))</span>
+
+    <span class="n">DataProcessor</span><span class="o">.</span><span class="n">create_gene_table</span><span class="p">(</span><span class="n">DataProcessor</span><span class="o">.</span><span class="n">process_ensembl_metadata</span><span class="p">(</span><span class="n">metadata_dest</span><span class="p">),</span>
+                                    <span class="n">DataProcessor</span><span class="o">.</span><span class="n">process_hgnc_metadata</span><span class="p">(</span><span class="n">metadata_dest</span><span class="p">),</span>
+                                    <span class="n">expression_df</span><span class="p">,</span>
+                                    <span class="n">db_dest</span><span class="p">)</span>
+
+    <span class="n">DataProcessor</span><span class="o">.</span><span class="n">create_expression_table</span><span class="p">(</span><span class="n">expression_df</span><span class="p">,</span>
+                                          <span class="n">raw_count_df</span><span class="p">,</span>
+                                          <span class="n">db_dest</span><span class="p">)</span>
+
+    <span class="n">DataProcessor</span><span class="o">.</span><span class="n">create_pipeline_table</span><span class="p">(</span><span class="n">rnaseq</span><span class="p">,</span> <span class="n">db_dest</span><span class="p">)</span>
+
+    <span class="n">SQLscripts</span><span class="o">.</span><span class="n">prepare_populate_script</span><span class="p">(</span><span class="n">db_dest</span><span class="p">)</span>
+
+
+<span class="k">class</span> <span class="nc">Log</span><span class="p">:</span>
+    <span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;Expression Store Script Logger&#39;</span><span class="p">)</span>
+    <span class="n">ch</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">StreamHandler</span><span class="p">()</span>
+    <span class="n">formatter</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">Formatter</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">%(asctime)s</span><span class="s1"> - </span><span class="si">%(name)s</span><span class="s1"> - </span><span class="si">%(levelname)s</span><span class="s1"> - </span><span class="si">%(message)s</span><span class="s1">&#39;</span><span class="p">)</span>
+    <span class="n">ch</span><span class="o">.</span><span class="n">setFormatter</span><span class="p">(</span><span class="n">formatter</span><span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">addHandler</span><span class="p">(</span><span class="n">ch</span><span class="p">)</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">setLevel</span><span class="p">(</span><span class="n">logging</span><span class="o">.</span><span class="n">INFO</span><span class="p">)</span>
+
+
+<span class="k">class</span> <span class="nc">Helper</span><span class="p">:</span>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">gunzip_files</span><span class="p">(</span><span class="n">directory</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;This method unzips all .gz files in a given directory, and deletes the .gz files afterwards.</span>
+<span class="sd">        :param directory: Path to directory, which contains files to be unzipped</span>
+<span class="sd">        :return: None</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">gz_files</span> <span class="o">=</span> <span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="n">directory</span> <span class="o">+</span> <span class="s2">&quot;/*.gz&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">gz</span> <span class="ow">in</span> <span class="n">gz_files</span><span class="p">:</span>
+            <span class="k">with</span> <span class="n">gzip</span><span class="o">.</span><span class="n">open</span><span class="p">(</span><span class="n">gz</span><span class="p">,</span> <span class="s1">&#39;rb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f_in</span><span class="p">:</span>
+                <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">gz</span><span class="p">[:</span><span class="o">-</span><span class="mi">3</span><span class="p">],</span> <span class="s1">&#39;wb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f_out</span><span class="p">:</span>
+                    <span class="n">shutil</span><span class="o">.</span><span class="n">copyfileobj</span><span class="p">(</span><span class="n">f_in</span><span class="p">,</span> <span class="n">f_out</span><span class="p">)</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">gz</span><span class="p">)</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">retrieve_data</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">destination</span><span class="p">,</span> <span class="n">retry_count</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This method downloads files from a remote source and saves them in the destination directory.</span>
+<span class="sd">        :param url: URL to file, which has to be downloaded</span>
+<span class="sd">        :param destination: Path to directory, where the files should be saved</span>
+<span class="sd">        :param retry_count: When retry_count is 0, stop script</span>
+<span class="sd">        :return:</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">urllib</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">urlretrieve</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">destination</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">ConnectionResetError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">retry_count</span> <span class="o">==</span> <span class="mi">5</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">e</span>
+            <span class="n">retry_count</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="n">Log</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s1">&#39;There are </span><span class="si">{}</span><span class="s1"> tries left to download from&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="mi">5</span> <span class="o">-</span> <span class="n">retry_count</span><span class="p">))</span>
+            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+            <span class="n">Helper</span><span class="o">.</span><span class="n">retrieve_data</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">destination</span><span class="p">,</span> <span class="n">retry_count</span><span class="p">)</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">extract_icgc_run_id</span><span class="p">(</span><span class="n">string</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This method splits a specific string, created by ICGC.The split truncates the Read suffix.</span>
+<span class="sd">        :param string: Any given string, which might needs be truncated.</span>
+<span class="sd">        :return: splitted String</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">string</span> <span class="o">=</span> <span class="n">string</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;.&#39;</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">string</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;SWID&quot;</span><span class="p">):</span>
+            <span class="n">new</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;_R._00.&#39;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">string</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">new</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">new</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;-R.&#39;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">string</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">new</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">extract_sample_id</span><span class="p">(</span><span class="n">string</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This method splits sample_id strings, and truncates the substrings generated by StringTie</span>
+<span class="sd">        :param string: Any given string, which might needs be truncated.</span>
+<span class="sd">        :return: splitted String</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">string</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;SRR&#39;</span><span class="p">):</span>
+            <span class="n">string</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span>
+                <span class="sa">r</span><span class="s2">&quot;_.Aligned.sortedByCoord.*.*.*&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;&quot;</span><span class="p">,</span>
+                <span class="n">string</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">string</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span>
+                <span class="sa">r</span><span class="s2">&quot;Aligned.sortedByCoord.out.*.*.*&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;&quot;</span><span class="p">,</span>
+                <span class="n">string</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">string</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">create_csv</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="n">file_name</span><span class="p">,</span> <span class="n">db_dest</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This method exports a DataFrame to a csv-File with no Index</span>
+<span class="sd">        :param df: DataFrame to be exported</span>
+<span class="sd">        :param file_name: File name for the exported csv-file</span>
+<span class="sd">        :param db_dest: Destination Directory, where csv should be saved</span>
+<span class="sd">        :return: None</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">Log</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Writing csv from </span><span class="si">{}</span><span class="s2"> dataframe&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">file_name</span><span class="p">))</span>
+        <span class="n">df</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">db_dest</span><span class="p">,</span> <span class="s1">&#39;</span><span class="si">{}</span><span class="s1">.csv&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">file_name</span><span class="p">)),</span> <span class="n">sep</span><span class="o">=</span><span class="s1">&#39;,&#39;</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">create_csv_from_dask</span><span class="p">(</span><span class="n">ddf</span><span class="p">,</span> <span class="n">file_name</span><span class="p">,</span> <span class="n">db_dest</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This method exports a DASK DataFrame to a csv-File with no Index</span>
+<span class="sd">        :param ddf: dask DataFrame</span>
+<span class="sd">        :param file_name: File name for the exported csv-file</span>
+<span class="sd">        :param db_dest: Destination Directory, where csv should be saved</span>
+<span class="sd">        :return:</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">Log</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Writing csv from </span><span class="si">{}</span><span class="s2"> dask dataframe&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">file_name</span><span class="p">))</span>
+        <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        <span class="k">with</span> <span class="n">ProgressBar</span><span class="p">():</span>
+            <span class="n">ddf</span><span class="o">.</span><span class="n">to_csv</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">db_dest</span><span class="p">,</span> <span class="s1">&#39;</span><span class="si">{}</span><span class="s1">.csv&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">file_name</span><span class="p">)),</span> <span class="n">single_file</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">index</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="n">Log</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Writing </span><span class="si">{}</span><span class="s2">.csv has taken </span><span class="si">{}</span><span class="s2"> seconds&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">file_name</span><span class="p">,</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span><span class="p">))</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">get_icgc_project_list</span><span class="p">(</span><span class="n">path_to_dcc_manifest</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This method creates a unique list of ICGC DCC projects, for which metadata has to be downloaded</span>
+<span class="sd">        :param path_to_dcc_manifest: Path to ICGC DCC manifest file</span>
+<span class="sd">        :return: list of unique ICGC DCC project codes</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">icgc_project_codes</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">()</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">icgc_project_codes</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="n">path_to_dcc_manifest</span><span class="p">,</span>
+                                             <span class="n">sep</span><span class="o">=</span><span class="s1">&#39;</span><span class="se">\t</span><span class="s1">&#39;</span><span class="p">,</span>
+                                             <span class="n">usecols</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;project_id/project_count&#39;</span><span class="p">])</span>
+            <span class="n">icgc_project_codes</span> <span class="o">=</span> <span class="n">icgc_project_codes</span><span class="p">[</span><span class="s1">&#39;project_id/project_count&#39;</span><span class="p">]</span> \
+                <span class="o">.</span><span class="n">unique</span><span class="p">()</span> \
+                <span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+        <span class="k">except</span><span class="p">:</span>
+            <span class="n">Log</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s1">&#39;ICGC DCC Manifest does not exist. Check path to manifest.&#39;</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">icgc_project_codes</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">get_sra_accession_list</span><span class="p">(</span><span class="n">path_to_sra_acc_list</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This method creates a unique list of SRA accessions, for which metadata has to be downloaded</span>
+<span class="sd">        :param path_to_sra_acc_list: path to SRA Accession List</span>
+<span class="sd">        :return: list of unique SRA accesssions</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">sra_accessions</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="n">path_to_sra_acc_list</span><span class="p">,</span> <span class="n">header</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+            <span class="n">sra_accessions</span> <span class="o">=</span> <span class="n">sra_accessions</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">unique</span><span class="p">()</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+        <span class="k">except</span><span class="p">:</span>
+            <span class="n">Log</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s1">&#39;SRA accession list does not exist. Check path to accession list.&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">sra_accessions</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">get_gdc_filename_list</span><span class="p">(</span><span class="n">path_to_gdc_manifest</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This method creates a list of GDC files, for which metadata has to be downloaded</span>
+<span class="sd">        :param path_to_gdc_manifest: path to GDC manifest file</span>
+<span class="sd">        :return: returns a unique list of GDC file_names</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">gdc_file_names</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="n">path_to_gdc_manifest</span><span class="p">,</span> <span class="n">sep</span><span class="o">=</span><span class="s1">&#39;</span><span class="se">\t</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">usecols</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;filename&#39;</span><span class="p">])</span>
+            <span class="n">gdc_file_names</span> <span class="o">=</span> <span class="n">gdc_file_names</span><span class="p">[</span><span class="s1">&#39;filename&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">unique</span><span class="p">()</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+        <span class="k">except</span><span class="p">:</span>
+            <span class="n">Log</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s1">&#39;GDC Manifest does not exist. Check path to manifest.&#39;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">gdc_file_names</span>
+
+
+<div class="viewcode-block" id="Downloader"><a class="viewcode-back" href="../database_preprocessor.html#database_preprocessor.Downloader">[docs]</a><span class="k">class</span> <span class="nc">Downloader</span><span class="p">:</span>
+<div class="viewcode-block" id="Downloader.download_sra_metadata"><a class="viewcode-back" href="../database_preprocessor.html#database_preprocessor.Downloader.download_sra_metadata">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">download_sra_metadata</span><span class="p">(</span><span class="n">sra_acc_lst</span><span class="p">,</span> <span class="n">metadata_dest</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This method downloads runInfo.csv from SRA depending on a list of SRA accessions</span>
+<span class="sd">        :param sra_acc_lst: List containing unique SRA Run accession</span>
+<span class="sd">        :param metadata_dest: Path to directory, where metadata should be downloaded to</span>
+<span class="sd">        :return:</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">sra_meta_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">metadata_dest</span><span class="p">,</span> <span class="s1">&#39;sra/&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">sra_meta_dir</span><span class="p">):</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">sra_meta_dir</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># Check if SRA CSV files have already been downloaded, and if so, skip download</span>
+            <span class="n">downloaded_files</span> <span class="o">=</span> <span class="p">[</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;.&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span>
+                                <span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">sra_meta_dir</span><span class="p">,</span> <span class="s1">&#39;*.csv&#39;</span><span class="p">))]</span>
+            <span class="n">sra_acc_lst</span> <span class="o">=</span> <span class="p">[</span><span class="n">file</span> <span class="k">for</span> <span class="n">file</span> <span class="ow">in</span> <span class="n">sra_acc_lst</span> <span class="k">if</span> <span class="n">file</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">downloaded_files</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">sra_acc_lst</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">Log</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;Download Metadata from Sequence Read Archive (SRA)&#39;</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">sra_acc_lst</span><span class="p">:</span>
+                <span class="n">sra_url</span> <span class="o">=</span> <span class="s1">&#39;http://trace.ncbi.nlm.nih.gov/Traces/sra/&#39;</span> \
+                          <span class="s1">&#39;sra.cgi?save=efetch&amp;db=sra&amp;rettype=runinfo&amp;term=</span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+                <span class="n">Helper</span><span class="o">.</span><span class="n">retrieve_data</span><span class="p">(</span><span class="n">sra_url</span><span class="p">,</span> <span class="n">sra_meta_dir</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;.csv&#39;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">Log</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;Metadata from Sequence Read Archive (SRA) already exists&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Downloader.download_icgc_project_metadata"><a class="viewcode-back" href="../database_preprocessor.html#database_preprocessor.Downloader.download_icgc_project_metadata">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">download_icgc_project_metadata</span><span class="p">(</span><span class="n">icgc_project_lst</span><span class="p">,</span> <span class="n">metadata_dest</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This method downloads all necessary metadata from ICGC DCC</span>
+<span class="sd">        :param icgc_project_lst: Unique List of Project Codes from ICGC DCC</span>
+<span class="sd">        :param metadata_dest: Path to directory, where metadata should be downloaded tod</span>
+<span class="sd">        :return:</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">icgc_meta_dest</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">metadata_dest</span><span class="p">,</span> <span class="s1">&#39;icgc/&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">icgc_meta_dest</span><span class="p">):</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">icgc_meta_dest</span><span class="p">)</span>
+        <span class="n">Log</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Downloading Metadata from ICGC DCC, if not already exists.&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">icgc_project_lst</span><span class="p">:</span>
+            <span class="n">sample_url</span> <span class="o">=</span> <span class="s1">&#39;https://dcc.icgc.org/api/v1/&#39;</span> \
+                         <span class="s1">&#39;download?fn=/current/Projects/</span><span class="si">{}</span><span class="s1">/sample.</span><span class="si">{}</span><span class="s1">.tsv.gz&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
+            <span class="n">donor_url</span> <span class="o">=</span> <span class="s1">&#39;https://dcc.icgc.org/api/v1/&#39;</span> \
+                        <span class="s1">&#39;download?fn=/current/Projects/</span><span class="si">{}</span><span class="s1">/donor.</span><span class="si">{}</span><span class="s1">.tsv.gz&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
+            <span class="n">specimen_url</span> <span class="o">=</span> <span class="s1">&#39;https://dcc.icgc.org/api/v1/&#39;</span> \
+                           <span class="s1">&#39;download?fn=/current/Projects/</span><span class="si">{}</span><span class="s1">/specimen.</span><span class="si">{}</span><span class="s1">.tsv.gz&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
+            <span class="n">donor_set_url</span> <span class="o">=</span> <span class="s1">&#39;https://dcc.icgc.org/api/v1/repository/files/export?&#39;</span> \
+                            <span class="s1">&#39;filters=%7B</span><span class="si">%22f</span><span class="s1">ile</span><span class="si">%22%</span><span class="s1">3A%7B%22projectCode</span><span class="si">%22%</span><span class="s1">3A%7B</span><span class="si">%22i</span><span class="s1">s</span><span class="si">%22%</span><span class="s1">3A%5B%22</span><span class="si">{}%22%</span><span class="s1">5D%7D%7D%7D&amp;&#39;</span> \
+                            <span class="s1">&#39;type=tsv&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">icgc_meta_dest</span><span class="p">,</span> <span class="s1">&#39;sample_&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;.tsv.gz&#39;</span><span class="p">))</span> \
+                    <span class="ow">or</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">icgc_meta_dest</span><span class="p">,</span> <span class="s1">&#39;sample_&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;.tsv&#39;</span><span class="p">)):</span>
+                <span class="k">pass</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">Helper</span><span class="o">.</span><span class="n">retrieve_data</span><span class="p">(</span><span class="n">sample_url</span><span class="p">,</span> <span class="n">icgc_meta_dest</span> <span class="o">+</span> <span class="s1">&#39;sample_&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;.tsv.gz&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">icgc_meta_dest</span><span class="p">,</span> <span class="s1">&#39;donor_&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;.tsv.gz&#39;</span><span class="p">))</span> \
+                    <span class="ow">or</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">icgc_meta_dest</span><span class="p">,</span> <span class="s1">&#39;donor_&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;.tsv&#39;</span><span class="p">)):</span>
+                <span class="k">pass</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">Helper</span><span class="o">.</span><span class="n">retrieve_data</span><span class="p">(</span><span class="n">donor_url</span><span class="p">,</span> <span class="n">icgc_meta_dest</span> <span class="o">+</span> <span class="s1">&#39;donor_&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;.tsv.gz&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">icgc_meta_dest</span><span class="p">,</span> <span class="s1">&#39;specimen_&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;.tsv.gz&#39;</span><span class="p">))</span> \
+                    <span class="ow">or</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">icgc_meta_dest</span><span class="p">,</span> <span class="s1">&#39;specimen_&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;.tsv&#39;</span><span class="p">)):</span>
+                <span class="k">pass</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">Helper</span><span class="o">.</span><span class="n">retrieve_data</span><span class="p">(</span><span class="n">specimen_url</span><span class="p">,</span> <span class="n">icgc_meta_dest</span> <span class="o">+</span> <span class="s1">&#39;specimen_&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;.tsv.gz&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">icgc_meta_dest</span><span class="p">,</span> <span class="s1">&#39;repository_&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;.tsv&#39;</span><span class="p">)):</span>
+                <span class="k">pass</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">Helper</span><span class="o">.</span><span class="n">retrieve_data</span><span class="p">(</span><span class="n">donor_set_url</span><span class="p">,</span> <span class="n">icgc_meta_dest</span> <span class="o">+</span> <span class="s1">&#39;repository_&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;.tsv&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Downloader.download_gdc_file_metadata"><a class="viewcode-back" href="../database_preprocessor.html#database_preprocessor.Downloader.download_gdc_file_metadata">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">download_gdc_file_metadata</span><span class="p">(</span><span class="n">gdc_file_name_list</span><span class="p">,</span> <span class="n">metadata_dest</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This method downloads all required Metadata from GDC</span>
+<span class="sd">        :param gdc_file_name_list: Unique list of GDC file names</span>
+<span class="sd">        :param metadata_dest: Path to directory, where metadata should be downloaded to</span>
+<span class="sd">        :return:</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">gdc_meta_dest</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">metadata_dest</span><span class="p">,</span> <span class="s1">&#39;gdc/&#39;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">gdc_meta_dest</span><span class="p">):</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">gdc_meta_dest</span><span class="p">)</span>
+        <span class="n">downloaded_files</span> <span class="o">=</span> <span class="p">[</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">basename</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;.&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span>
+                            <span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">gdc_meta_dest</span><span class="p">,</span> <span class="s1">&#39;/*.csv&#39;</span><span class="p">))]</span>
+
+        <span class="n">missing</span> <span class="o">=</span> <span class="p">[</span><span class="n">file</span> <span class="k">for</span> <span class="n">file</span> <span class="ow">in</span> <span class="n">gdc_file_name_list</span>
+                   <span class="k">if</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">(</span><span class="n">downloaded</span> <span class="ow">in</span> <span class="n">file</span> <span class="k">for</span> <span class="n">downloaded</span> <span class="ow">in</span> <span class="n">downloaded_files</span><span class="p">)]</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">missing</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">missing</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">Log</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;Download Metadata from GDC&#39;</span><span class="p">)</span>
+            <span class="n">cases_endpt</span> <span class="o">=</span> <span class="s1">&#39;https://api.gdc.cancer.gov/files&#39;</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">missing</span><span class="p">:</span>
+                <span class="n">fields</span> <span class="o">=</span> <span class="n">ListDict</span><span class="o">.</span><span class="n">gdc_attributes</span>
+                <span class="n">fields</span> <span class="o">=</span> <span class="s1">&#39;,&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">fields</span><span class="p">)</span>
+                <span class="n">filters</span> <span class="o">=</span> <span class="p">{</span>
+                    <span class="s2">&quot;op&quot;</span><span class="p">:</span> <span class="s2">&quot;in&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="p">{</span>
+                        <span class="s2">&quot;field&quot;</span><span class="p">:</span> <span class="s2">&quot;file_name&quot;</span><span class="p">,</span>
+                        <span class="s2">&quot;value&quot;</span><span class="p">:</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)]</span>
+                    <span class="p">}</span>
+                <span class="p">}</span>
+                <span class="n">params</span> <span class="o">=</span> <span class="p">{</span>
+                    <span class="s2">&quot;filters&quot;</span><span class="p">:</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">filters</span><span class="p">),</span>
+                    <span class="s2">&quot;fields&quot;</span><span class="p">:</span> <span class="n">fields</span><span class="p">,</span>
+                    <span class="s2">&quot;format&quot;</span><span class="p">:</span> <span class="s2">&quot;CSV&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;size&quot;</span><span class="p">:</span> <span class="s2">&quot;100&quot;</span>
+                <span class="p">}</span>
+                <span class="n">response</span> <span class="o">=</span> <span class="n">requests</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">cases_endpt</span><span class="p">,</span> <span class="n">params</span><span class="o">=</span><span class="n">params</span><span class="p">)</span>
+                <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">gdc_meta_dest</span><span class="p">,</span> <span class="s2">&quot;</span><span class="si">{}</span><span class="s2">.csv&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;_&#39;</span><span class="p">)[</span><span class="mi">0</span><span class="p">])),</span> <span class="s2">&quot;wb&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">csv_file</span><span class="p">:</span>
+                    <span class="n">csv_file</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">response</span><span class="o">.</span><span class="n">content</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">Log</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;Metadata from GDC already downloaded&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Downloader.download_ensembl_metadata"><a class="viewcode-back" href="../database_preprocessor.html#database_preprocessor.Downloader.download_ensembl_metadata">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">download_ensembl_metadata</span><span class="p">(</span><span class="n">metadata_dest</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This method downloads data from Ensembl!</span>
+<span class="sd">        :param metadata_dest: Path to directory, where metadata has been downloaded to</span>
+<span class="sd">        :return:</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">ensembl_meta_dest</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">metadata_dest</span><span class="p">,</span> <span class="s1">&#39;ensembl/&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">ensembl_meta_dest</span><span class="p">):</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">ensembl_meta_dest</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">ensembl_meta_dest</span><span class="p">,</span> <span class="s1">&#39;genes_GRCh37.gtf&#39;</span><span class="p">)):</span>
+            <span class="n">Log</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Downloading Ensembl Metadata&quot;</span><span class="p">)</span>
+            <span class="n">ensembl_url</span> <span class="o">=</span> <span class="s1">&#39;ftp://ftp.ensembl.org/pub/&#39;</span> \
+                          <span class="s1">&#39;grch37/current/gtf/homo_sapiens/Homo_sapiens.GRCh37.87.gtf.gz&#39;</span>
+            <span class="n">Helper</span><span class="o">.</span><span class="n">retrieve_data</span><span class="p">(</span><span class="n">ensembl_url</span><span class="p">,</span> <span class="n">ensembl_meta_dest</span> <span class="o">+</span> <span class="s1">&#39;/Homo_sapiens.GRCh37.87.gtf.gz&#39;</span><span class="p">)</span>
+            <span class="n">Helper</span><span class="o">.</span><span class="n">gunzip_files</span><span class="p">(</span><span class="n">ensembl_meta_dest</span><span class="p">)</span>
+            <span class="n">cwd</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">getcwd</span><span class="p">()</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">chdir</span><span class="p">(</span><span class="n">ensembl_meta_dest</span><span class="p">)</span>
+            <span class="n">subprocess</span><span class="o">.</span><span class="n">call</span><span class="p">(</span>
+                <span class="sd">&#39;&#39;&#39;awk -F&quot;\t&quot; &#39;$3 == &quot;gene&quot; { print $0 }&#39; Homo_sapiens.GRCh37.87.gtf &gt; genes_GRCh37.gtf&#39;&#39;&#39;</span><span class="p">,</span>
+                <span class="n">shell</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="s1">&#39;Homo_sapiens.GRCh37.87.gtf&#39;</span><span class="p">)</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">chdir</span><span class="p">(</span><span class="n">cwd</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">Log</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Ensembl Metadata already downloaded and processed&quot;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Downloader.download_hgnc"><a class="viewcode-back" href="../database_preprocessor.html#database_preprocessor.Downloader.download_hgnc">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">download_hgnc</span><span class="p">(</span><span class="n">metadata_dest</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This method downloads metadata from HGNC</span>
+<span class="sd">        :param metadata_dest: Path to directory, where metadata should be saved</span>
+<span class="sd">        :return: DataFrame containing information from HGNC</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">hgnc_meta_dest</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">metadata_dest</span><span class="p">,</span> <span class="s1">&#39;hgnc/&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">hgnc_meta_dest</span><span class="p">):</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">hgnc_meta_dest</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">hgnc_meta_dest</span><span class="p">,</span> <span class="s1">&#39;hgnc_complete_set.txt&#39;</span><span class="p">)):</span>
+            <span class="n">Log</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Downloading HGNC Metadata&quot;</span><span class="p">)</span>
+            <span class="n">hgnc_url</span> <span class="o">=</span> <span class="s1">&#39;ftp://ftp.ebi.ac.uk/pub/databases/genenames/hgnc/tsv/hgnc_complete_set.txt&#39;</span>
+            <span class="n">Helper</span><span class="o">.</span><span class="n">retrieve_data</span><span class="p">(</span><span class="n">hgnc_url</span><span class="p">,</span> <span class="n">hgnc_meta_dest</span> <span class="o">+</span> <span class="s1">&#39;/hgnc_complete_set.txt&#39;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">Log</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;HGNC Metadata already downloaded&quot;</span><span class="p">)</span></div></div>
+
+
+<span class="k">class</span> <span class="nc">DataProcessor</span><span class="p">:</span>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">process_hgnc_metadata</span><span class="p">(</span><span class="n">metadata_dest</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This method processes the metadata from HGNC</span>
+<span class="sd">        :param metadata_dest: Path to directory, where metadata has been downloaded to</span>
+<span class="sd">        :return: DataFrame containing information about HGNC</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">path_to_hgnc_txt</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">metadata_dest</span><span class="p">,</span> <span class="s1">&#39;hgnc/hgnc_complete_set.txt&#39;</span><span class="p">)</span>
+        <span class="n">hgnc_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="n">path_to_hgnc_txt</span><span class="p">,</span>
+                              <span class="n">sep</span><span class="o">=</span><span class="s1">&#39;</span><span class="se">\t</span><span class="s1">&#39;</span><span class="p">,</span>
+                              <span class="n">usecols</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;hgnc_id&#39;</span><span class="p">,</span> <span class="s1">&#39;symbol&#39;</span><span class="p">,</span> <span class="s1">&#39;locus_group&#39;</span><span class="p">,</span> <span class="s1">&#39;locus_type&#39;</span><span class="p">,</span> <span class="s1">&#39;gene_family&#39;</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">hgnc_df</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">process_ensembl_metadata</span><span class="p">(</span><span class="n">metadata_dest</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This method processes ensembl metadata from the processed gtf file</span>
+<span class="sd">        :param metadata_dest: Path to directory, where metadata has been downloaded to</span>
+<span class="sd">        :return: DataFrame containing information about Ensembl</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">path_to_ensembl_gtf</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">metadata_dest</span><span class="p">,</span> <span class="s1">&#39;ensembl/genes_GRCh37.gtf&#39;</span><span class="p">)</span>
+        <span class="n">ensembl_df</span> <span class="o">=</span> <span class="n">pr</span><span class="o">.</span><span class="n">read_gtf</span><span class="p">(</span><span class="n">path_to_ensembl_gtf</span><span class="p">,</span>
+                                 <span class="n">as_df</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">ensembl_df</span> <span class="o">=</span> <span class="n">ensembl_df</span><span class="p">[[</span><span class="s1">&#39;gene_id&#39;</span><span class="p">,</span> <span class="s1">&#39;gene_version&#39;</span><span class="p">,</span> <span class="s1">&#39;gene_name&#39;</span><span class="p">,</span> <span class="s1">&#39;gene_biotype&#39;</span><span class="p">]]</span>
+        <span class="k">return</span> <span class="n">ensembl_df</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">concat_sra_meta</span><span class="p">(</span><span class="n">inpath_sra_meta_csv</span><span class="p">,</span> <span class="n">used_accessions</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This method concatenates all downloaded metadata files from SRA, if they are in scope of the SRA files,</span>
+<span class="sd">        which have been processed with nf-core/rnaseq</span>
+<span class="sd">        :param inpath_sra_meta_csv: Path to directory, where the SRA metadata has been saved</span>
+<span class="sd">        :param used_accessions: SRA accessions, which have been used for analysis with rnaseq</span>
+<span class="sd">        :return: DataFrame containing all processed metadata from SRA</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">sra_csv_files</span> <span class="o">=</span> <span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="n">inpath_sra_meta_csv</span> <span class="o">+</span> <span class="s2">&quot;/*.csv&quot;</span><span class="p">)</span>
+        <span class="n">sra_files_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">file</span> <span class="ow">in</span> <span class="n">sra_csv_files</span><span class="p">:</span>
+            <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="n">file</span><span class="p">,</span> <span class="n">sep</span><span class="o">=</span><span class="s1">&#39;,&#39;</span><span class="p">)</span>
+            <span class="n">sra_files_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
+        <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">(</span><span class="n">sra_files_list</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="n">df</span><span class="p">[</span><span class="s1">&#39;Run&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">isin</span><span class="p">(</span><span class="n">used_accessions</span><span class="p">)]</span>
+        <span class="n">df</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="n">ListDict</span><span class="o">.</span><span class="n">sra_col_dict</span><span class="p">)</span>
+        <span class="n">df</span><span class="p">[</span><span class="s1">&#39;portal&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;SRA&quot;</span>
+        <span class="k">return</span> <span class="n">df</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">concat_gdc_meta</span><span class="p">(</span><span class="n">inpath_gdc_meta</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This method concatenates metadata, downloaded from GDC</span>
+<span class="sd">        :param inpath_gdc_meta: Path to directory, where GDC metadata has been saved</span>
+<span class="sd">        :return: DataFrame containing information about GDC metadata</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">gdc_csv_files</span> <span class="o">=</span> <span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="n">inpath_gdc_meta</span> <span class="o">+</span> <span class="s2">&quot;/*.csv&quot;</span><span class="p">)</span>
+            <span class="n">gdc_meta</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">file</span> <span class="ow">in</span> <span class="n">gdc_csv_files</span><span class="p">:</span>
+                <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="n">file</span><span class="p">,</span> <span class="n">sep</span><span class="o">=</span><span class="s1">&#39;,&#39;</span><span class="p">)</span>
+                <span class="n">gdc_meta</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
+            <span class="n">gdc_meta_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">(</span><span class="n">gdc_meta</span><span class="p">)</span>
+            <span class="n">gdc_meta_df</span> <span class="o">=</span> <span class="n">gdc_meta_df</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="n">ListDict</span><span class="o">.</span><span class="n">gdc_col_dict</span><span class="p">)</span>
+            <span class="n">gdc_meta_df</span><span class="p">[</span><span class="s1">&#39;portal&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;GDC&#39;</span>
+            <span class="k">return</span> <span class="n">gdc_meta_df</span>
+        <span class="k">except</span><span class="p">:</span>
+            <span class="n">gdc_meta_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="n">ListDict</span><span class="o">.</span><span class="n">gdc_col_dict</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">gdc_meta_df</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">concat_icgc_meta</span><span class="p">(</span><span class="n">metadata_dest</span><span class="p">,</span> <span class="n">path_to_dcc_manifest</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This method joins metadata from ICGC DCC (Donor, Sample, Project, Repository)</span>
+<span class="sd">        based on their matching columns</span>
+<span class="sd">        :param metadata_dest: Path to directory, where metadata has been downloaded to</span>
+<span class="sd">        :param path_to_dcc_manifest: Path to ICGC DCC manifest file</span>
+<span class="sd">        :return: returns DataFrames merged repository and manifest, sample, donor</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">icgc_meta_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">metadata_dest</span><span class="p">,</span> <span class="s1">&#39;icgc&#39;</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">icgc_tsv_files</span> <span class="o">=</span> <span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="n">icgc_meta_path</span> <span class="o">+</span> <span class="s2">&quot;/*.tsv&quot;</span><span class="p">)</span>
+            <span class="n">icgc_donor</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">icgc_sample</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">icgc_specimen</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">icgc_repository</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">file</span> <span class="ow">in</span> <span class="n">icgc_tsv_files</span><span class="p">:</span>
+                <span class="k">if</span> <span class="s2">&quot;donor&quot;</span> <span class="ow">in</span> <span class="n">file</span><span class="p">:</span>
+                    <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="n">file</span><span class="p">,</span> <span class="n">sep</span><span class="o">=</span><span class="s1">&#39;</span><span class="se">\t</span><span class="s1">&#39;</span><span class="p">)</span>
+                    <span class="n">icgc_donor</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
+                <span class="k">elif</span> <span class="s2">&quot;sample&quot;</span> <span class="ow">in</span> <span class="n">file</span><span class="p">:</span>
+                    <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="n">file</span><span class="p">,</span> <span class="n">sep</span><span class="o">=</span><span class="s1">&#39;</span><span class="se">\t</span><span class="s1">&#39;</span><span class="p">)</span>
+                    <span class="n">icgc_sample</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
+                <span class="k">elif</span> <span class="s2">&quot;specimen&quot;</span> <span class="ow">in</span> <span class="n">file</span><span class="p">:</span>
+                    <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="n">file</span><span class="p">,</span> <span class="n">sep</span><span class="o">=</span><span class="s1">&#39;</span><span class="se">\t</span><span class="s1">&#39;</span><span class="p">)</span>
+                    <span class="n">icgc_specimen</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
+                <span class="k">elif</span> <span class="s2">&quot;repository&quot;</span> <span class="ow">in</span> <span class="n">file</span><span class="p">:</span>
+                    <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="n">file</span><span class="p">,</span> <span class="n">sep</span><span class="o">=</span><span class="s1">&#39;</span><span class="se">\t</span><span class="s1">&#39;</span><span class="p">)</span>
+                    <span class="n">icgc_repository</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
+
+            <span class="n">donor_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">(</span><span class="n">icgc_donor</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+            <span class="n">sample_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">(</span><span class="n">icgc_sample</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+            <span class="n">specimen_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">(</span><span class="n">icgc_specimen</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+            <span class="n">repository_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">(</span><span class="n">icgc_repository</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+            <span class="n">repository_df</span> <span class="o">=</span> <span class="n">repository_df</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="n">ListDict</span><span class="o">.</span><span class="n">icgc_col_names_repository</span><span class="p">)</span>
+
+            <span class="n">manifest_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="n">path_to_dcc_manifest</span><span class="p">,</span>
+                                      <span class="n">sep</span><span class="o">=</span><span class="s1">&#39;</span><span class="se">\t</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">usecols</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;file_id&#39;</span><span class="p">,</span> <span class="s1">&#39;file_name&#39;</span><span class="p">])</span>
+
+            <span class="n">merge_rep_man</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">repository_df</span><span class="p">,</span> <span class="n">manifest_df</span><span class="p">,</span>
+                                     <span class="n">on</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;file_id&#39;</span><span class="p">,</span> <span class="s1">&#39;file_name&#39;</span><span class="p">],</span>
+                                     <span class="n">how</span><span class="o">=</span><span class="s1">&#39;right&#39;</span><span class="p">)</span>
+            <span class="n">merge_rep_man</span><span class="p">[</span><span class="s1">&#39;file_name&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">merge_rep_man</span><span class="p">[</span><span class="s1">&#39;file_name&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">Helper</span><span class="o">.</span><span class="n">extract_icgc_run_id</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+            <span class="n">sample_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">sample_df</span><span class="p">,</span> <span class="n">specimen_df</span><span class="p">,</span>
+                                 <span class="n">on</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;icgc_specimen_id&#39;</span><span class="p">,</span> <span class="s1">&#39;icgc_donor_id&#39;</span><span class="p">,</span> <span class="s1">&#39;project_code&#39;</span><span class="p">,</span> <span class="s1">&#39;submitted_donor_id&#39;</span><span class="p">,</span>
+                                     <span class="s1">&#39;submitted_specimen_id&#39;</span><span class="p">,</span> <span class="s1">&#39;percentage_cellularity&#39;</span><span class="p">,</span> <span class="s1">&#39;level_of_cellularity&#39;</span><span class="p">],</span>
+                                 <span class="n">how</span><span class="o">=</span><span class="s1">&#39;left&#39;</span><span class="p">)</span>
+
+
+        <span class="k">except</span><span class="p">:</span>
+            <span class="n">Log</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;No ICGC DCC Manifest provided&#39;</span><span class="p">)</span>
+            <span class="n">merge_rep_man</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="n">ListDict</span><span class="o">.</span><span class="n">rep_man_cols</span><span class="p">)</span>
+            <span class="n">donor_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="n">ListDict</span><span class="o">.</span><span class="n">donor_df_cols</span><span class="p">)</span>
+            <span class="n">sample_df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="n">ListDict</span><span class="o">.</span><span class="n">sample_df_cols</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">merge_rep_man</span><span class="p">,</span> <span class="n">donor_df</span><span class="p">,</span> <span class="n">sample_df</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">stringtie_results_out</span><span class="p">(</span><span class="n">res_inpath</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This method extracts information from nf-core/rnaseq&#39;s output</span>
+<span class="sd">        :param res_inpath: Path to rna-seq results folder</span>
+<span class="sd">        :return: returns list of DataFrames containing information from StringTie</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">ddf_data</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">files</span> <span class="o">=</span> <span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="n">res_inpath</span> <span class="o">+</span> <span class="s2">&quot;/*.txt&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">file</span> <span class="ow">in</span> <span class="n">files</span><span class="p">:</span>
+            <span class="n">dd_frame</span> <span class="o">=</span> <span class="n">dd</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="n">file</span><span class="p">,</span> <span class="n">sep</span><span class="o">=</span><span class="s1">&#39;</span><span class="se">\t</span><span class="s1">&#39;</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;Reference&#39;</span><span class="p">:</span> <span class="s1">&#39;object&#39;</span><span class="p">})</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span>
+                <span class="n">columns</span><span class="o">=</span><span class="n">ListDict</span><span class="o">.</span><span class="n">stringtie_dict</span><span class="p">)</span>
+            <span class="n">dd_frame</span> <span class="o">=</span> <span class="n">dd_frame</span><span class="o">.</span><span class="n">drop</span><span class="p">([</span><span class="s1">&#39;start_pos&#39;</span><span class="p">,</span> <span class="s1">&#39;end_pos&#39;</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+            <span class="n">dd_frame</span><span class="p">[</span><span class="s1">&#39;strand&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">dd_frame</span><span class="p">[</span><span class="s1">&#39;strand&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;object&#39;</span><span class="p">)</span>
+            <span class="n">dd_frame</span><span class="p">[</span><span class="s1">&#39;reference&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">dd_frame</span><span class="p">[</span><span class="s1">&#39;reference&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;object&#39;</span><span class="p">)</span>
+            <span class="n">dd_frame</span><span class="p">[</span><span class="s1">&#39;run&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">Helper</span><span class="o">.</span><span class="n">extract_sample_id</span><span class="p">(</span><span class="n">file</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+            <span class="n">dd_frame</span><span class="p">[</span><span class="s1">&#39;run&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">dd_frame</span><span class="p">[</span><span class="s1">&#39;run&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;-R1&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">x</span><span class="p">))</span>
+            <span class="n">dd_frame</span><span class="p">[</span><span class="s1">&#39;run&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">dd_frame</span><span class="p">[</span><span class="s1">&#39;run&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;-R2&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">x</span><span class="p">))</span>
+            <span class="n">ddf_data</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">dd_frame</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">ddf_data</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">create_gene_table</span><span class="p">(</span><span class="n">ensembl_df</span><span class="p">,</span> <span class="n">hgnc_df</span><span class="p">,</span> <span class="n">expression_df</span><span class="p">,</span> <span class="n">db_dest</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This method creates the gene_table csv files</span>
+<span class="sd">        :param ensembl_df: Ensembl DataFrame</span>
+<span class="sd">        :param hgnc_df: HUGO DataFrame</span>
+<span class="sd">        :param expression_df: Expression DataFrame</span>
+<span class="sd">        :param db_dest: Path to directory, where cdv files should be saved</span>
+<span class="sd">        :return:</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># Convert DASK DataFrame to Pandas DataFrame</span>
+        <span class="n">Log</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Starting to create gene table&quot;</span><span class="p">)</span>
+        <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        <span class="n">expression_ddf</span> <span class="o">=</span> <span class="n">expression_df</span><span class="p">[[</span><span class="s1">&#39;gene_id&#39;</span><span class="p">,</span> <span class="s1">&#39;gene_name&#39;</span><span class="p">,</span> <span class="s1">&#39;reference&#39;</span><span class="p">,</span> <span class="s1">&#39;strand&#39;</span><span class="p">]]</span>
+        <span class="n">expression_ddf</span> <span class="o">=</span> <span class="n">expression_ddf</span><span class="o">.</span><span class="n">drop_duplicates</span><span class="p">()</span>
+
+        <span class="n">gene</span> <span class="o">=</span> <span class="n">dd</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">expression_ddf</span><span class="p">,</span> <span class="n">ensembl_df</span><span class="p">,</span>
+                        <span class="n">on</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;gene_id&#39;</span><span class="p">,</span> <span class="s1">&#39;gene_name&#39;</span><span class="p">],</span>
+                        <span class="n">how</span><span class="o">=</span><span class="s1">&#39;left&#39;</span><span class="p">)</span>
+        <span class="n">gene</span> <span class="o">=</span> <span class="n">dd</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">gene</span><span class="p">,</span> <span class="n">hgnc_df</span><span class="p">,</span>
+                        <span class="n">left_on</span><span class="o">=</span><span class="s1">&#39;gene_name&#39;</span><span class="p">,</span>
+                        <span class="n">right_on</span><span class="o">=</span><span class="s1">&#39;symbol&#39;</span><span class="p">,</span>
+                        <span class="n">how</span><span class="o">=</span><span class="s1">&#39;left&#39;</span><span class="p">)</span>
+        <span class="n">Log</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Gene table created in </span><span class="si">{}</span><span class="s2"> seconds&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span><span class="p">))</span>
+
+        <span class="n">Helper</span><span class="o">.</span><span class="n">create_csv_from_dask</span><span class="p">(</span><span class="n">gene</span><span class="p">,</span> <span class="s2">&quot;gene&quot;</span><span class="p">,</span> <span class="n">db_dest</span><span class="p">)</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">create_expression_table</span><span class="p">(</span><span class="n">expression_df</span><span class="p">,</span> <span class="n">raw_count_df</span><span class="p">,</span> <span class="n">db_dest</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This method creates the expression csv fil</span>
+<span class="sd">        :param expression_df: expression DataFrame</span>
+<span class="sd">        :param raw_count_df: raw_count DataFrame from featureCounts</span>
+<span class="sd">        :param db_dest: Path to directory, where cdv files should be saved</span>
+<span class="sd">        :return:</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># expression = expression_df.drop([&#39;reference&#39;, &#39;strand&#39;], axis=1)</span>
+        <span class="n">Log</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Starting to create expression table. This might take a while.&quot;</span><span class="p">)</span>
+        <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        <span class="n">expression</span> <span class="o">=</span> <span class="n">expression_df</span><span class="p">[[</span><span class="s1">&#39;run&#39;</span><span class="p">,</span> <span class="s1">&#39;gene_id&#39;</span><span class="p">,</span> <span class="s1">&#39;fpkm&#39;</span><span class="p">,</span>
+                                    <span class="s1">&#39;tpm&#39;</span><span class="p">,</span> <span class="s1">&#39;coverage&#39;</span><span class="p">]]</span>
+        <span class="n">expression</span> <span class="o">=</span> <span class="n">expression</span><span class="o">.</span><span class="n">groupby</span><span class="p">([</span><span class="s1">&#39;run&#39;</span><span class="p">,</span> <span class="s1">&#39;gene_id&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span><span class="o">.</span><span class="n">reset_index</span><span class="p">()</span>
+
+        <span class="n">expression</span> <span class="o">=</span> <span class="n">expression</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">raw_count_df</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;gene_id&#39;</span><span class="p">,</span> <span class="s1">&#39;run&#39;</span><span class="p">],</span> <span class="n">how</span><span class="o">=</span><span class="s1">&#39;left&#39;</span><span class="p">)</span>
+        <span class="n">Log</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;Expression table created in </span><span class="si">{}</span><span class="s2"> seconds&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span><span class="p">))</span>
+        <span class="n">Helper</span><span class="o">.</span><span class="n">create_csv_from_dask</span><span class="p">(</span><span class="n">expression</span><span class="p">,</span> <span class="s2">&quot;expression&quot;</span><span class="p">,</span> <span class="n">db_dest</span><span class="p">)</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">create_project_layer_tables</span><span class="p">(</span><span class="n">sra_meta_df</span><span class="p">,</span> <span class="n">icgc_meta_df</span><span class="p">,</span> <span class="n">gdc_meta_df</span><span class="p">,</span> <span class="n">db_dest</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This method creates tables for ProjectLayer</span>
+<span class="sd">        :param sra_meta_df: Metadata DataFrame from SRA</span>
+<span class="sd">        :param icgc_meta_df: Metadata DataFrame from ICGC DCC</span>
+<span class="sd">        :param gdc_meta_df: Metadata DataFrame from GDC</span>
+<span class="sd">        :param db_dest: Path to directory, where cdv files should be saved</span>
+<span class="sd">        :return:</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">sra</span> <span class="o">=</span> <span class="n">sra_meta_df</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="n">ListDict</span><span class="o">.</span><span class="n">database_columns</span><span class="p">)</span>
+        <span class="k">except</span><span class="p">:</span>
+            <span class="n">sra</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="n">ListDict</span><span class="o">.</span><span class="n">sra_df_cols</span><span class="p">)</span>
+        <span class="n">rep_man</span> <span class="o">=</span> <span class="n">icgc_meta_df</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="n">ListDict</span><span class="o">.</span><span class="n">database_columns</span><span class="p">)</span>
+        <span class="n">donor</span> <span class="o">=</span> <span class="n">icgc_meta_df</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="n">ListDict</span><span class="o">.</span><span class="n">database_columns</span><span class="p">)</span>
+        <span class="n">sample</span> <span class="o">=</span> <span class="n">icgc_meta_df</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="n">ListDict</span><span class="o">.</span><span class="n">database_columns</span><span class="p">)</span>
+
+        <span class="n">merged_sample_donor</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">sample</span><span class="p">,</span> <span class="n">donor</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;donor_id&#39;</span><span class="p">,</span> <span class="s1">&#39;project_code&#39;</span><span class="p">,</span> <span class="s1">&#39;submitted_donor_id&#39;</span><span class="p">],</span> <span class="n">how</span><span class="o">=</span><span class="s1">&#39;left&#39;</span><span class="p">)</span>
+        <span class="n">final_merge</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">merged_sample_donor</span><span class="p">,</span> <span class="n">rep_man</span><span class="p">,</span>
+                               <span class="n">on</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;donor_id&#39;</span><span class="p">,</span> <span class="s1">&#39;icgc_specimen_id&#39;</span><span class="p">,</span> <span class="s1">&#39;project_code&#39;</span><span class="p">,</span> <span class="s1">&#39;specimen_type&#39;</span><span class="p">,</span> <span class="s1">&#39;sample_id&#39;</span><span class="p">],</span>
+                               <span class="n">how</span><span class="o">=</span><span class="s1">&#39;right&#39;</span><span class="p">)</span>
+        <span class="n">final_merge</span><span class="p">[</span><span class="s1">&#39;portal&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;ICGC DCC&#39;</span>
+        <span class="n">concat_meta</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">final_merge</span><span class="p">,</span> <span class="n">sra</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">concat_meta</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">concat</span><span class="p">([</span><span class="n">concat_meta</span><span class="p">,</span> <span class="n">gdc_meta_df</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+        <span class="n">project_db</span> <span class="o">=</span> <span class="n">concat_meta</span><span class="p">[[</span><span class="s1">&#39;project_code&#39;</span><span class="p">,</span> <span class="s1">&#39;study&#39;</span><span class="p">,</span> <span class="s1">&#39;sra_study&#39;</span><span class="p">,</span>
+                                  <span class="s1">&#39;dbgap_study_accession&#39;</span><span class="p">]]</span>
+        <span class="n">project_db</span> <span class="o">=</span> <span class="n">project_db</span><span class="o">.</span><span class="n">drop_duplicates</span><span class="p">()</span>
+
+        <span class="n">donor_db</span> <span class="o">=</span> <span class="n">concat_meta</span><span class="p">[</span><span class="n">ListDict</span><span class="o">.</span><span class="n">donor_db_list</span><span class="p">]</span>
+        <span class="n">donor_db</span> <span class="o">=</span> <span class="n">donor_db</span><span class="p">[</span><span class="n">donor_db</span><span class="p">[</span><span class="s1">&#39;donor_id&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">notna</span><span class="p">()]</span>
+        <span class="n">donor_db</span> <span class="o">=</span> <span class="n">donor_db</span><span class="o">.</span><span class="n">drop_duplicates</span><span class="p">()</span>
+        <span class="n">sample_db</span> <span class="o">=</span> <span class="n">concat_meta</span><span class="p">[</span><span class="n">ListDict</span><span class="o">.</span><span class="n">sample_db_list</span><span class="p">]</span>
+        <span class="n">sample_db</span> <span class="o">=</span> <span class="n">sample_db</span><span class="o">.</span><span class="n">drop_duplicates</span><span class="p">()</span>
+        <span class="n">sample_db</span><span class="p">[</span><span class="s1">&#39;body_site&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">sample_db</span><span class="p">[</span><span class="s1">&#39;body_site&#39;</span><span class="p">]</span> \
+            <span class="o">.</span><span class="n">fillna</span><span class="p">(</span><span class="n">sample_db</span><span class="p">[</span><span class="s1">&#39;project_code&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">str</span><span class="p">)</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">ListDict</span><span class="o">.</span><span class="n">icgc_tissue_dict</span><span class="p">))</span>
+
+        <span class="n">countinfo_db</span> <span class="o">=</span> <span class="n">concat_meta</span><span class="p">[[</span><span class="s1">&#39;run&#39;</span><span class="p">,</span> <span class="s1">&#39;library_name&#39;</span><span class="p">,</span> <span class="s1">&#39;library_strategy&#39;</span><span class="p">,</span> <span class="s1">&#39;library_selection&#39;</span><span class="p">,</span>
+                                    <span class="s1">&#39;library_source&#39;</span><span class="p">,</span> <span class="s1">&#39;library_layout&#39;</span><span class="p">]]</span>
+
+        <span class="n">Helper</span><span class="o">.</span><span class="n">create_csv</span><span class="p">(</span><span class="n">project_db</span><span class="p">,</span> <span class="s1">&#39;project&#39;</span><span class="p">,</span> <span class="n">db_dest</span><span class="p">)</span>
+        <span class="n">Helper</span><span class="o">.</span><span class="n">create_csv</span><span class="p">(</span><span class="n">sample_db</span><span class="p">,</span> <span class="s1">&#39;sample&#39;</span><span class="p">,</span> <span class="n">db_dest</span><span class="p">)</span>
+        <span class="n">Helper</span><span class="o">.</span><span class="n">create_csv</span><span class="p">(</span><span class="n">donor_db</span><span class="p">,</span> <span class="s1">&#39;donor&#39;</span><span class="p">,</span> <span class="n">db_dest</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">project_db</span><span class="p">,</span> <span class="n">donor_db</span><span class="p">,</span> <span class="n">sample_db</span><span class="p">,</span> <span class="n">countinfo_db</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">create_countinfo_raw_count_table</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="n">rnaseq</span><span class="p">,</span> <span class="n">db_dest</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This method creates the countinfo table</span>
+<span class="sd">        :param df: DataFrame containing some f the countinfo information</span>
+<span class="sd">        :param rnaseq: Path to reuslts of nf-core/rnaseq</span>
+<span class="sd">        :param db_dest: Path do directory where files for database should be stored</span>
+<span class="sd">        :return:</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># TODO: CLEAN UP CODE</span>
+        <span class="n">merged_gene_counts</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">rnaseq</span><span class="p">,</span> <span class="s2">&quot;results/featureCounts/merged_gene_counts.txt&quot;</span><span class="p">),</span>
+                                         <span class="n">sep</span><span class="o">=</span><span class="s1">&#39;</span><span class="se">\t</span><span class="s1">&#39;</span><span class="p">)</span>
+
+        <span class="n">raw_counts</span> <span class="o">=</span> <span class="n">merged_gene_counts</span>
+        <span class="n">raw_counts</span><span class="o">.</span><span class="n">columns</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">Helper</span><span class="o">.</span><span class="n">extract_sample_id</span><span class="p">(</span><span class="n">x</span><span class="p">),</span> <span class="n">raw_counts</span><span class="o">.</span><span class="n">columns</span><span class="p">))</span>
+        <span class="n">raw_counts</span> <span class="o">=</span> <span class="n">raw_counts</span><span class="o">.</span><span class="n">drop</span><span class="p">([</span><span class="s1">&#39;gene_name&#39;</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">set_index</span><span class="p">([</span><span class="s1">&#39;Geneid&#39;</span><span class="p">])</span>
+        <span class="n">raw_counts</span> <span class="o">=</span> <span class="n">raw_counts</span><span class="o">.</span><span class="n">stack</span><span class="p">()</span><span class="o">.</span><span class="n">to_frame</span><span class="p">()</span><span class="o">.</span><span class="n">reset_index</span><span class="p">()</span>
+        <span class="n">raw_counts</span> <span class="o">=</span> <span class="n">raw_counts</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;Geneid&#39;</span><span class="p">:</span> <span class="s1">&#39;gene_id&#39;</span><span class="p">,</span>
+                                                <span class="s1">&#39;level_1&#39;</span><span class="p">:</span> <span class="s1">&#39;run&#39;</span><span class="p">,</span>
+                                                <span class="mi">0</span><span class="p">:</span> <span class="s1">&#39;raw_count&#39;</span><span class="p">})</span>
+        <span class="n">raw_counts</span><span class="p">[</span><span class="s1">&#39;run&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">raw_counts</span><span class="p">[</span><span class="s1">&#39;run&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;-R1&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">x</span><span class="p">))</span>
+        <span class="n">raw_counts</span><span class="p">[</span><span class="s1">&#39;run&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">raw_counts</span><span class="p">[</span><span class="s1">&#39;run&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;-R2&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">x</span><span class="p">))</span>
+
+        <span class="n">merged_gene_counts_series</span> <span class="o">=</span> <span class="n">merged_gene_counts</span><span class="o">.</span><span class="n">drop</span><span class="p">(</span>
+            <span class="p">[</span><span class="s1">&#39;Geneid&#39;</span><span class="p">,</span> <span class="s1">&#39;gene_name&#39;</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">sum_gene_counts</span> <span class="o">=</span> <span class="n">merged_gene_counts_series</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">countinfo</span> <span class="o">=</span> <span class="n">sum_gene_counts</span><span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
+        <span class="n">countinfo</span> <span class="o">=</span> <span class="n">countinfo</span><span class="o">.</span><span class="n">reset_index</span><span class="p">(</span><span class="n">level</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">countinfo</span> <span class="o">=</span> <span class="n">countinfo</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span>
+            <span class="n">columns</span><span class="o">=</span><span class="p">{</span>
+                <span class="s1">&#39;index&#39;</span><span class="p">:</span> <span class="s1">&#39;run&#39;</span><span class="p">,</span>
+                <span class="mi">0</span><span class="p">:</span> <span class="s1">&#39;sum_counts&#39;</span><span class="p">})</span>
+        <span class="n">countinfo</span><span class="p">[</span><span class="s1">&#39;run&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">countinfo</span><span class="p">[</span><span class="s1">&#39;run&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">Helper</span><span class="o">.</span><span class="n">extract_sample_id</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+        <span class="n">countinfo</span><span class="p">[</span><span class="s1">&#39;run&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">countinfo</span><span class="p">[</span><span class="s1">&#39;run&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;-R1&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">x</span><span class="p">))</span>
+        <span class="n">countinfo</span><span class="p">[</span><span class="s1">&#39;run&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">countinfo</span><span class="p">[</span><span class="s1">&#39;run&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;-R2&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">x</span><span class="p">))</span>
+        <span class="n">countinfo</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">countinfo</span><span class="p">,</span>
+                             <span class="n">df</span><span class="p">[[</span><span class="s1">&#39;run&#39;</span><span class="p">,</span> <span class="s1">&#39;library_name&#39;</span><span class="p">,</span> <span class="s1">&#39;library_strategy&#39;</span><span class="p">,</span>
+                                 <span class="s1">&#39;library_selection&#39;</span><span class="p">,</span> <span class="s1">&#39;library_source&#39;</span><span class="p">,</span> <span class="s1">&#39;library_layout&#39;</span><span class="p">]],</span>
+                             <span class="n">on</span><span class="o">=</span><span class="s1">&#39;run&#39;</span><span class="p">,</span>
+                             <span class="n">how</span><span class="o">=</span><span class="s1">&#39;left&#39;</span><span class="p">)</span>
+        <span class="n">countinfo</span> <span class="o">=</span> <span class="n">countinfo</span><span class="o">.</span><span class="n">drop_duplicates</span><span class="p">()</span>
+        <span class="n">Helper</span><span class="o">.</span><span class="n">create_csv</span><span class="p">(</span><span class="n">countinfo</span><span class="p">,</span> <span class="s1">&#39;countinfo&#39;</span><span class="p">,</span> <span class="n">db_dest</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">raw_counts</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">create_pipeline_table</span><span class="p">(</span><span class="n">rnaseq</span><span class="p">,</span> <span class="n">db_dest</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This method creates the pipeline table for the database</span>
+<span class="sd">        :param rnaseq: Path to reuslts of nf-core/rnaseq</span>
+<span class="sd">        :param db_dest: Path do directory where files for database should be stored</span>
+<span class="sd">        :return: None</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">pipeline</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">rnaseq</span><span class="p">,</span> <span class="s1">&#39;results/pipeline_info/software_versions.csv&#39;</span><span class="p">),</span>
+                               <span class="n">sep</span><span class="o">=</span><span class="s1">&#39;</span><span class="se">\t</span><span class="s1">&#39;</span><span class="p">,</span>
+                               <span class="n">header</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span><span class="o">.</span><span class="n">T</span>
+        <span class="n">pipeline</span> <span class="o">=</span> <span class="n">pipeline</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="n">pipeline</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="n">pipeline</span> <span class="o">=</span> <span class="n">pipeline</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
+        <span class="n">pipeline</span> <span class="o">=</span> <span class="n">pipeline</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">columns</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;Trim Galore!&#39;</span><span class="p">:</span> <span class="s1">&#39;Trim_Galore&#39;</span><span class="p">,</span>
+                                            <span class="s1">&#39;Picard MarkDuplicates&#39;</span><span class="p">:</span> <span class="s1">&#39;Picard_MarkDuplicates&#39;</span><span class="p">,</span>
+                                            <span class="s1">&#39;nf-core/rnaseq&#39;</span><span class="p">:</span> <span class="s1">&#39;nf_core_rnaseq&#39;</span><span class="p">})</span>
+        <span class="n">Helper</span><span class="o">.</span><span class="n">create_csv</span><span class="p">(</span><span class="n">pipeline</span><span class="p">,</span> <span class="s2">&quot;pipeline&quot;</span><span class="p">,</span> <span class="n">db_dest</span><span class="p">)</span>
+
+
+<span class="k">class</span> <span class="nc">ListDict</span><span class="p">:</span>
+    <span class="c1"># Dictionaries</span>
+    <span class="n">base_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)</span><span class="o">.</span><span class="n">parent</span>
+    <span class="n">current_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">getcwd</span><span class="p">()</span>
+    <span class="k">with</span> \
+            <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">base_path</span><span class="p">,</span> <span class="s1">&#39;dicts_lists/sra_col_dict.json&#39;</span><span class="p">),</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">sra_col</span><span class="p">,</span> \
+            <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">base_path</span><span class="p">,</span> <span class="s1">&#39;dicts_lists/icgc_rep_dict.json&#39;</span><span class="p">),</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">icgc_col_names</span><span class="p">,</span> \
+            <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">base_path</span><span class="p">,</span> <span class="s1">&#39;dicts_lists/column_db_dict.json&#39;</span><span class="p">),</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">db_col</span><span class="p">,</span> \
+            <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">base_path</span><span class="p">,</span> <span class="s1">&#39;dicts_lists/icgc_tissue_dict.json&#39;</span><span class="p">),</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">icgc_tissue</span><span class="p">,</span> \
+            <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">base_path</span><span class="p">,</span> <span class="s1">&#39;dicts_lists/stringtie_out_dict.json&#39;</span><span class="p">),</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">stringtie_dict</span><span class="p">,</span> \
+            <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">base_path</span><span class="p">,</span> <span class="s1">&#39;dicts_lists/gdc_col_dict.json&#39;</span><span class="p">),</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">gdc_cols</span><span class="p">:</span>
+        <span class="n">sra_col_dict</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">sra_col</span><span class="p">)</span>
+        <span class="n">icgc_col_names_repository</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">icgc_col_names</span><span class="p">)</span>
+        <span class="n">database_columns</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">db_col</span><span class="p">)</span>
+        <span class="n">icgc_tissue_dict</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">icgc_tissue</span><span class="p">)</span>
+        <span class="n">stringtie_dict</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">stringtie_dict</span><span class="p">)</span>
+        <span class="n">gdc_col_dict</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">gdc_cols</span><span class="p">)</span>
+
+    <span class="c1"># Database columns</span>
+    <span class="k">with</span> \
+            <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">base_path</span><span class="p">,</span> <span class="s1">&#39;dicts_lists/icgc_repository_manifdest_col_list.json&#39;</span><span class="p">),</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">rep_man</span><span class="p">,</span> \
+            <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">base_path</span><span class="p">,</span> <span class="s1">&#39;dicts_lists/donor_df_col_list.json&#39;</span><span class="p">),</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">don</span><span class="p">,</span> \
+            <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">base_path</span><span class="p">,</span> <span class="s1">&#39;dicts_lists/sample_df_col_list.json&#39;</span><span class="p">),</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">sam</span><span class="p">,</span> \
+            <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">base_path</span><span class="p">,</span> <span class="s1">&#39;dicts_lists/sra_df_col_list.json&#39;</span><span class="p">),</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">sra_df</span><span class="p">,</span> \
+            <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">base_path</span><span class="p">,</span> <span class="s1">&#39;dicts_lists/donor_db_list.json&#39;</span><span class="p">),</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">donor_db</span><span class="p">,</span> \
+            <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">base_path</span><span class="p">,</span> <span class="s1">&#39;dicts_lists/sample_db_list.json&#39;</span><span class="p">),</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">sample_db</span><span class="p">,</span> \
+            <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">base_path</span><span class="p">,</span> <span class="s1">&#39;dicts_lists/gdc_attr_list.json&#39;</span><span class="p">),</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">gdc_attr</span><span class="p">:</span>
+        <span class="n">rep_man_cols</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">rep_man</span><span class="p">)</span>
+        <span class="n">donor_df_cols</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">don</span><span class="p">)</span>
+        <span class="n">sample_df_cols</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">sam</span><span class="p">)</span>
+        <span class="n">sra_df_cols</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">sra_df</span><span class="p">)</span>
+        <span class="n">donor_db_list</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">donor_db</span><span class="p">)</span>
+        <span class="n">sample_db_list</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">sample_db</span><span class="p">)</span>
+        <span class="n">gdc_attributes</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">gdc_attr</span><span class="p">)</span>
+
+
+<span class="k">class</span> <span class="nc">SQLscripts</span><span class="p">:</span>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">prepare_populate_script</span><span class="p">(</span><span class="n">db_dest</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        This method creates a populate.sql script based on the given input of db_dest</span>
+<span class="sd">        :param db_dest: Path do directory where files for database are stored</span>
+<span class="sd">        :return: None</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s1">&#39;postgresql_scripts/populate_tables_template.sql&#39;</span><span class="p">,</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">sql_file</span><span class="p">:</span>
+            <span class="n">script</span> <span class="o">=</span> <span class="n">sql_file</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+
+        <span class="n">script</span> <span class="o">=</span> <span class="n">script</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">&quot;$PATH$&quot;</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">db_dest</span><span class="p">))</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s1">&#39;postgresql_scripts/populate_tables.sql&#39;</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">file</span><span class="p">:</span>
+            <span class="n">file</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">script</span><span class="p">)</span>
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="n">main</span><span class="p">())</span>
+</pre></div>
+
+           </div>
+           
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &#169; Copyright 2021, Florian Kraus.
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>
