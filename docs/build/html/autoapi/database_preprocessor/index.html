@@ -1,0 +1,564 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  
+  <title>database_preprocessor &mdash; Expression Store 0.1 documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/graphviz.css" type="text/css" />
+
+  
+  
+
+  
+  
+
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/underscore.js"></script>
+        <script src="../../_static/doctools.js"></script>
+    
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../../index.html" class="icon icon-home"> Expression Store
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../index.html">API Reference</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">Expression Store</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../index.html" class="icon icon-home"></a> &raquo;</li>
+        
+      <li><code class="xref py py-mod docutils literal notranslate"><span class="pre">database_preprocessor</span></code></li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+          
+            <a href="../../_sources/autoapi/database_preprocessor/index.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="module-database_preprocessor">
+<span id="database-preprocessor"></span><h1><a class="reference internal" href="#module-database_preprocessor" title="database_preprocessor"><code class="xref py py-mod docutils literal notranslate"><span class="pre">database_preprocessor</span></code></a><a class="headerlink" href="#module-database_preprocessor" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="module-contents">
+<h2>Module Contents<a class="headerlink" href="#module-contents" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="classes">
+<h3>Classes<a class="headerlink" href="#classes" title="Permalink to this headline">¶</a></h3>
+<table class="longtable docutils align-default">
+<colgroup>
+<col style="width: 10%" />
+<col style="width: 90%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#database_preprocessor.Log" title="database_preprocessor.Log"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Log</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#database_preprocessor.Helper" title="database_preprocessor.Helper"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Helper</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#database_preprocessor.Downloader" title="database_preprocessor.Downloader"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Downloader</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#database_preprocessor.DataProcessor" title="database_preprocessor.DataProcessor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DataProcessor</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#database_preprocessor.ListDict" title="database_preprocessor.ListDict"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ListDict</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#database_preprocessor.SQLscripts" title="database_preprocessor.SQLscripts"><code class="xref py py-obj docutils literal notranslate"><span class="pre">SQLscripts</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="functions">
+<h3>Functions<a class="headerlink" href="#functions" title="Permalink to this headline">¶</a></h3>
+<table class="longtable docutils align-default">
+<colgroup>
+<col style="width: 10%" />
+<col style="width: 90%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#database_preprocessor.main" title="database_preprocessor.main"><code class="xref py py-obj docutils literal notranslate"><span class="pre">main</span></code></a>()</p></td>
+<td><p>This is the main class, which performs all necessary steps to successfully download, process and export metadata</p></td>
+</tr>
+</tbody>
+</table>
+<dl class="py data">
+<dt id="database_preprocessor.parser">
+<code class="sig-prename descclassname"><span class="pre">database_preprocessor.</span></code><code class="sig-name descname"><span class="pre">parser</span></code><a class="headerlink" href="#database_preprocessor.parser" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt id="database_preprocessor.main">
+<code class="sig-prename descclassname"><span class="pre">database_preprocessor.</span></code><code class="sig-name descname"><span class="pre">main</span></code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#database_preprocessor.main" title="Permalink to this definition">¶</a></dt>
+<dd><p>This is the main class, which performs all necessary steps to successfully download, process and export metadata
+and data for the database</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>rnaseq</strong> – Path to the base directory of nf-core/rnaseq</p></li>
+<li><p><strong>sra_file</strong> – Path to the SRA accession list txt-file</p></li>
+<li><p><strong>dcc_manifest</strong> – Path to the manifest file of ICGC DCC</p></li>
+<li><p><strong>gdc_manifest</strong> – Path to the manifest file of GDC</p></li>
+<li><p><strong>metadata_dest</strong> – Path to a previously created directory, to store downloaded metadata</p></li>
+<li><p><strong>db_dest</strong> – Path to the destination directory of the created csv-files, which are imported to the database</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py class">
+<dt id="database_preprocessor.Log">
+<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">database_preprocessor.</span></code><code class="sig-name descname"><span class="pre">Log</span></code><a class="headerlink" href="#database_preprocessor.Log" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="py attribute">
+<dt id="database_preprocessor.Log.logger">
+<code class="sig-name descname"><span class="pre">logger</span></code><a class="headerlink" href="#database_preprocessor.Log.logger" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt id="database_preprocessor.Log.ch">
+<code class="sig-name descname"><span class="pre">ch</span></code><a class="headerlink" href="#database_preprocessor.Log.ch" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt id="database_preprocessor.Log.formatter">
+<code class="sig-name descname"><span class="pre">formatter</span></code><a class="headerlink" href="#database_preprocessor.Log.formatter" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="database_preprocessor.Helper">
+<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">database_preprocessor.</span></code><code class="sig-name descname"><span class="pre">Helper</span></code><a class="headerlink" href="#database_preprocessor.Helper" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="py method">
+<dt id="database_preprocessor.Helper.gunzip_files">
+<em class="property"><span class="pre">static</span> </em><code class="sig-name descname"><span class="pre">gunzip_files</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">directory</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#database_preprocessor.Helper.gunzip_files" title="Permalink to this definition">¶</a></dt>
+<dd><p>This method unzips all .gz files in a given directory, and deletes the .gz files afterwards.
+:param directory: Path to directory, which contains files to be unzipped
+:return: None</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="database_preprocessor.Helper.retrieve_data">
+<em class="property"><span class="pre">static</span> </em><code class="sig-name descname"><span class="pre">retrieve_data</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">url</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">destination</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">retry_count</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#database_preprocessor.Helper.retrieve_data" title="Permalink to this definition">¶</a></dt>
+<dd><p>This method downloads files from a remote source and saves them in the destination directory.
+:param url: URL to file, which has to be downloaded
+:param destination: Path to directory, where the files should be saved
+:param retry_count: When retry_count is 0, stop script
+:return:</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="database_preprocessor.Helper.extract_icgc_run_id">
+<em class="property"><span class="pre">static</span> </em><code class="sig-name descname"><span class="pre">extract_icgc_run_id</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">string</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#database_preprocessor.Helper.extract_icgc_run_id" title="Permalink to this definition">¶</a></dt>
+<dd><p>This method splits a specific string, created by ICGC.The split truncates the Read suffix.
+:param string: Any given string, which might needs be truncated.
+:return: splitted String</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="database_preprocessor.Helper.extract_sample_id">
+<em class="property"><span class="pre">static</span> </em><code class="sig-name descname"><span class="pre">extract_sample_id</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">string</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#database_preprocessor.Helper.extract_sample_id" title="Permalink to this definition">¶</a></dt>
+<dd><p>This method splits sample_id strings, and truncates the substrings generated by StringTie
+:param string: Any given string, which might needs be truncated.
+:return: splitted String</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="database_preprocessor.Helper.create_csv">
+<em class="property"><span class="pre">static</span> </em><code class="sig-name descname"><span class="pre">create_csv</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">file_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">db_dest</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#database_preprocessor.Helper.create_csv" title="Permalink to this definition">¶</a></dt>
+<dd><p>This method exports a DataFrame to a csv-File with no Index
+:param df: DataFrame to be exported
+:param file_name: File name for the exported csv-file
+:param db_dest: Destination Directory, where csv should be saved
+:return: None</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="database_preprocessor.Helper.create_csv_from_dask">
+<em class="property"><span class="pre">static</span> </em><code class="sig-name descname"><span class="pre">create_csv_from_dask</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ddf</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">file_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">db_dest</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#database_preprocessor.Helper.create_csv_from_dask" title="Permalink to this definition">¶</a></dt>
+<dd><p>This method exports a DASK DataFrame to a csv-File with no Index
+:param ddf: dask DataFrame
+:param file_name: File name for the exported csv-file
+:param db_dest: Destination Directory, where csv should be saved
+:return:</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="database_preprocessor.Helper.get_icgc_project_list">
+<em class="property"><span class="pre">static</span> </em><code class="sig-name descname"><span class="pre">get_icgc_project_list</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path_to_dcc_manifest</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#database_preprocessor.Helper.get_icgc_project_list" title="Permalink to this definition">¶</a></dt>
+<dd><p>This method creates a unique list of ICGC DCC projects, for which metadata has to be downloaded
+:param path_to_dcc_manifest: Path to ICGC DCC manifest file
+:return: list of unique ICGC DCC project codes</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="database_preprocessor.Helper.get_sra_accession_list">
+<em class="property"><span class="pre">static</span> </em><code class="sig-name descname"><span class="pre">get_sra_accession_list</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path_to_sra_acc_list</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#database_preprocessor.Helper.get_sra_accession_list" title="Permalink to this definition">¶</a></dt>
+<dd><p>This method creates a unique list of SRA accessions, for which metadata has to be downloaded
+:param path_to_sra_acc_list: path to SRA Accession List
+:return: list of unique SRA accesssions</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="database_preprocessor.Helper.get_gdc_filename_list">
+<em class="property"><span class="pre">static</span> </em><code class="sig-name descname"><span class="pre">get_gdc_filename_list</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path_to_gdc_manifest</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#database_preprocessor.Helper.get_gdc_filename_list" title="Permalink to this definition">¶</a></dt>
+<dd><p>This method creates a list of GDC files, for which metadata has to be downloaded
+:param path_to_gdc_manifest: path to GDC manifest file
+:return: returns a unique list of GDC file_names</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="database_preprocessor.Downloader">
+<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">database_preprocessor.</span></code><code class="sig-name descname"><span class="pre">Downloader</span></code><a class="headerlink" href="#database_preprocessor.Downloader" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="py method">
+<dt id="database_preprocessor.Downloader.download_sra_metadata">
+<em class="property"><span class="pre">static</span> </em><code class="sig-name descname"><span class="pre">download_sra_metadata</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sra_acc_lst</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metadata_dest</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#database_preprocessor.Downloader.download_sra_metadata" title="Permalink to this definition">¶</a></dt>
+<dd><p>This method downloads runInfo.csv from SRA depending on a list of SRA accessions
+:param sra_acc_lst: List containing unique SRA Run accession
+:param metadata_dest: Path to directory, where metadata should be downloaded to
+:return:</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="database_preprocessor.Downloader.download_icgc_project_metadata">
+<em class="property"><span class="pre">static</span> </em><code class="sig-name descname"><span class="pre">download_icgc_project_metadata</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">icgc_project_lst</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metadata_dest</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#database_preprocessor.Downloader.download_icgc_project_metadata" title="Permalink to this definition">¶</a></dt>
+<dd><p>This method downloads all necessary metadata from ICGC DCC
+:param icgc_project_lst: Unique List of Project Codes from ICGC DCC
+:param metadata_dest: Path to directory, where metadata should be downloaded tod
+:return:</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="database_preprocessor.Downloader.download_gdc_file_metadata">
+<em class="property"><span class="pre">static</span> </em><code class="sig-name descname"><span class="pre">download_gdc_file_metadata</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">gdc_file_name_list</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metadata_dest</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#database_preprocessor.Downloader.download_gdc_file_metadata" title="Permalink to this definition">¶</a></dt>
+<dd><p>This method downloads all required Metadata from GDC
+:param gdc_file_name_list: Unique list of GDC file names
+:param metadata_dest: Path to directory, where metadata should be downloaded to
+:return:</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="database_preprocessor.Downloader.download_ensembl_metadata">
+<em class="property"><span class="pre">static</span> </em><code class="sig-name descname"><span class="pre">download_ensembl_metadata</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">metadata_dest</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#database_preprocessor.Downloader.download_ensembl_metadata" title="Permalink to this definition">¶</a></dt>
+<dd><p>This method downloads data from Ensembl!
+:param metadata_dest: Path to directory, where metadata has been downloaded to
+:return:</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="database_preprocessor.Downloader.download_hgnc">
+<em class="property"><span class="pre">static</span> </em><code class="sig-name descname"><span class="pre">download_hgnc</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">metadata_dest</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#database_preprocessor.Downloader.download_hgnc" title="Permalink to this definition">¶</a></dt>
+<dd><p>This method downloads metadata from HGNC
+:param metadata_dest: Path to directory, where metadata should be saved
+:return: DataFrame containing information from HGNC</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="database_preprocessor.DataProcessor">
+<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">database_preprocessor.</span></code><code class="sig-name descname"><span class="pre">DataProcessor</span></code><a class="headerlink" href="#database_preprocessor.DataProcessor" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="py method">
+<dt id="database_preprocessor.DataProcessor.process_hgnc_metadata">
+<em class="property"><span class="pre">static</span> </em><code class="sig-name descname"><span class="pre">process_hgnc_metadata</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">metadata_dest</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#database_preprocessor.DataProcessor.process_hgnc_metadata" title="Permalink to this definition">¶</a></dt>
+<dd><p>This method processes the metadata from HGNC
+:param metadata_dest: Path to directory, where metadata has been downloaded to
+:return: DataFrame containing information about HGNC</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="database_preprocessor.DataProcessor.process_ensembl_metadata">
+<em class="property"><span class="pre">static</span> </em><code class="sig-name descname"><span class="pre">process_ensembl_metadata</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">metadata_dest</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#database_preprocessor.DataProcessor.process_ensembl_metadata" title="Permalink to this definition">¶</a></dt>
+<dd><p>This method processes ensembl metadata from the processed gtf file
+:param metadata_dest: Path to directory, where metadata has been downloaded to
+:return: DataFrame containing information about Ensembl</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="database_preprocessor.DataProcessor.concat_sra_meta">
+<em class="property"><span class="pre">static</span> </em><code class="sig-name descname"><span class="pre">concat_sra_meta</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">inpath_sra_meta_csv</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">used_accessions</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#database_preprocessor.DataProcessor.concat_sra_meta" title="Permalink to this definition">¶</a></dt>
+<dd><p>This method concatenates all downloaded metadata files from SRA, if they are in scope of the SRA files,
+which have been processed with nf-core/rnaseq
+:param inpath_sra_meta_csv: Path to directory, where the SRA metadata has been saved
+:param used_accessions: SRA accessions, which have been used for analysis with rnaseq
+:return: DataFrame containing all processed metadata from SRA</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="database_preprocessor.DataProcessor.concat_gdc_meta">
+<em class="property"><span class="pre">static</span> </em><code class="sig-name descname"><span class="pre">concat_gdc_meta</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">inpath_gdc_meta</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#database_preprocessor.DataProcessor.concat_gdc_meta" title="Permalink to this definition">¶</a></dt>
+<dd><p>This method concatenates metadata, downloaded from GDC
+:param inpath_gdc_meta: Path to directory, where GDC metadata has been saved
+:return: DataFrame containing information about GDC metadata</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="database_preprocessor.DataProcessor.concat_icgc_meta">
+<em class="property"><span class="pre">static</span> </em><code class="sig-name descname"><span class="pre">concat_icgc_meta</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">metadata_dest</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">path_to_dcc_manifest</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#database_preprocessor.DataProcessor.concat_icgc_meta" title="Permalink to this definition">¶</a></dt>
+<dd><p>This method joins metadata from ICGC DCC (Donor, Sample, Project, Repository)
+based on their matching columns
+:param metadata_dest: Path to directory, where metadata has been downloaded to
+:param path_to_dcc_manifest: Path to ICGC DCC manifest file
+:return: returns DataFrames merged repository and manifest, sample, donor</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="database_preprocessor.DataProcessor.stringtie_results_out">
+<em class="property"><span class="pre">static</span> </em><code class="sig-name descname"><span class="pre">stringtie_results_out</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">res_inpath</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#database_preprocessor.DataProcessor.stringtie_results_out" title="Permalink to this definition">¶</a></dt>
+<dd><p>This method extracts information from nf-core/rnaseq’s output
+:param res_inpath: Path to rna-seq results folder
+:return: returns list of DataFrames containing information from StringTie</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="database_preprocessor.DataProcessor.create_gene_table">
+<em class="property"><span class="pre">static</span> </em><code class="sig-name descname"><span class="pre">create_gene_table</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ensembl_df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hgnc_df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">expression_df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">db_dest</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#database_preprocessor.DataProcessor.create_gene_table" title="Permalink to this definition">¶</a></dt>
+<dd><p>This method creates the gene_table csv files
+:param ensembl_df: Ensembl DataFrame
+:param hgnc_df: HUGO DataFrame
+:param expression_df: Expression DataFrame
+:param db_dest: Path to directory, where cdv files should be saved
+:return:</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="database_preprocessor.DataProcessor.create_expression_table">
+<em class="property"><span class="pre">static</span> </em><code class="sig-name descname"><span class="pre">create_expression_table</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">expression_df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">raw_count_df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">db_dest</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#database_preprocessor.DataProcessor.create_expression_table" title="Permalink to this definition">¶</a></dt>
+<dd><p>This method creates the expression csv fil
+:param expression_df: expression DataFrame
+:param raw_count_df: raw_count DataFrame from featureCounts
+:param db_dest: Path to directory, where cdv files should be saved
+:return:</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="database_preprocessor.DataProcessor.create_project_layer_tables">
+<em class="property"><span class="pre">static</span> </em><code class="sig-name descname"><span class="pre">create_project_layer_tables</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sra_meta_df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">icgc_meta_df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gdc_meta_df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">db_dest</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#database_preprocessor.DataProcessor.create_project_layer_tables" title="Permalink to this definition">¶</a></dt>
+<dd><p>This method creates tables for ProjectLayer
+:param sra_meta_df: Metadata DataFrame from SRA
+:param icgc_meta_df: Metadata DataFrame from ICGC DCC
+:param gdc_meta_df: Metadata DataFrame from GDC
+:param db_dest: Path to directory, where cdv files should be saved
+:return:</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="database_preprocessor.DataProcessor.create_countinfo_raw_count_table">
+<em class="property"><span class="pre">static</span> </em><code class="sig-name descname"><span class="pre">create_countinfo_raw_count_table</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rnaseq</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">db_dest</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#database_preprocessor.DataProcessor.create_countinfo_raw_count_table" title="Permalink to this definition">¶</a></dt>
+<dd><p>This method creates the countinfo table
+:param df: DataFrame containing some f the countinfo information
+:param rnaseq: Path to reuslts of nf-core/rnaseq
+:param db_dest: Path do directory where files for database should be stored
+:return:</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="database_preprocessor.DataProcessor.create_pipeline_table">
+<em class="property"><span class="pre">static</span> </em><code class="sig-name descname"><span class="pre">create_pipeline_table</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rnaseq</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">db_dest</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#database_preprocessor.DataProcessor.create_pipeline_table" title="Permalink to this definition">¶</a></dt>
+<dd><p>This method creates the pipeline table for the database
+:param rnaseq: Path to reuslts of nf-core/rnaseq
+:param db_dest: Path do directory where files for database should be stored
+:return: None</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="database_preprocessor.ListDict">
+<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">database_preprocessor.</span></code><code class="sig-name descname"><span class="pre">ListDict</span></code><a class="headerlink" href="#database_preprocessor.ListDict" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="py attribute">
+<dt id="database_preprocessor.ListDict.base_path">
+<code class="sig-name descname"><span class="pre">base_path</span></code><a class="headerlink" href="#database_preprocessor.ListDict.base_path" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt id="database_preprocessor.ListDict.current_dir">
+<code class="sig-name descname"><span class="pre">current_dir</span></code><a class="headerlink" href="#database_preprocessor.ListDict.current_dir" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="database_preprocessor.SQLscripts">
+<em class="property"><span class="pre">class</span> </em><code class="sig-prename descclassname"><span class="pre">database_preprocessor.</span></code><code class="sig-name descname"><span class="pre">SQLscripts</span></code><a class="headerlink" href="#database_preprocessor.SQLscripts" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="py method">
+<dt id="database_preprocessor.SQLscripts.prepare_populate_script">
+<em class="property"><span class="pre">static</span> </em><code class="sig-name descname"><span class="pre">prepare_populate_script</span></code><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">db_dest</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#database_preprocessor.SQLscripts.prepare_populate_script" title="Permalink to this definition">¶</a></dt>
+<dd><p>This method creates a populate.sql script based on the given input of db_dest
+:param db_dest: Path do directory where files for database are stored
+:return: None</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &#169; Copyright 2021, Florian Kraus.
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

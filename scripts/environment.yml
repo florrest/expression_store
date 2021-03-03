@@ -8,4 +8,5 @@ dependencies:
   - conda-forge::requests
   - conda-forge::sphinx
   - conda-forge::sphinx_rtd_theme
+  - conda-forge::sphinx-autoapi
   - bioconda::pyranges

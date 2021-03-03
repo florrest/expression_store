@@ -1,5 +1,5 @@
 .. Expression Store documentation master file, created by
-   sphinx-quickstart on Mon Feb 22 17:21:42 2021.
+   sphinx-quickstart on Wed Feb 24 17:09:52 2021.
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
@@ -10,7 +10,7 @@ Welcome to Expression Store's documentation!
    :maxdepth: 2
    :caption: Contents:
 
-   modules
+
 
 Indices and tables
 ==================
