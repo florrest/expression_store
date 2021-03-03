@@ -1,5 +1,5 @@
-database\_preprocessor module
-=============================
+Database Processor Script
+=========================
 
 The ``DataProcessor`` class
 ************************
