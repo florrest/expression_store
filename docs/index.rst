@@ -11,7 +11,7 @@ Welcome to Expression Store's documentation!
    :caption: Contents:
 
    modules
-
+   scripts
 
 Indices and tables
 ==================
