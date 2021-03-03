@@ -1,6 +1,20 @@
 database\_preprocessor module
 =============================
 
+The ``DataProcessor`` class
+************************
+.. autoclass:: database_preprocessor.DataProcessor
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+The ``SQLscripts`` class
+************************
+.. autoclass:: database_preprocessor.SQLscripts
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 The ``Downloader`` class
 ************************
 .. autoclass:: database_preprocessor.Downloader
@@ -9,6 +23,7 @@ The ``Downloader`` class
     :show-inheritance:
 
 The ``Helper`` class
+********************
 .. autoclass:: database_preprocessor.Helper
     :members:
     :undoc-members:
