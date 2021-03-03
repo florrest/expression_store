@@ -113,6 +113,7 @@ class Helper:
     @staticmethod
     def gunzip_files(directory):
         """This method unzips all .gz files in a given directory, and deletes the .gz files afterwards.
+
         :param directory: Path to directory, which contains files to be unzipped
         :return: None
         """
