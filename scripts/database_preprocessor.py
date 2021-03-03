@@ -754,7 +754,7 @@ class SQLscripts:
     @staticmethod
     def prepare_populate_script(db_dest):
         """This method creates a populate.sql script based on the given input of db_dest
-        
+
         :param db_dest: Path do directory where files for database are stored
         :return: None
         """

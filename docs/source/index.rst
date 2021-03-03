@@ -5,5 +5,8 @@ Welcome to Expression Store's documentation!
    :maxdepth: 2
    :caption: Contents:
 
+   intro
    database_preprocessor
+
+
 
