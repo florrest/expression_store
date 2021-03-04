@@ -37,14 +37,6 @@ parser.add_argument('--db_dest', type=str,
 def main():
     """ This is the main class, which performs all necessary steps to successfully download, process and export metadata
     and data for the database
-
-    :param rnaseq: Path to the base directory of nf-core/rnaseq
-    :param sra_file: Path to the SRA accession list txt-file
-    :param dcc_manifest: Path to the manifest file of ICGC DCC
-    :param gdc_manifest: Path to the manifest file of GDC
-    :param metadata_dest: Path to a previously created directory, to store downloaded metadata
-    :param db_dest: Path to the destination directory of the created csv-files, which are imported to the database
-    :return: None
     """
     args = parser.parse_args()
     rnaseq = args.rnaseq
@@ -211,7 +203,6 @@ class Helper:
         :param path_to_dcc_manifest: Path to ICGC DCC manifest file
         :return: list of unique ICGC DCC project codes
         """
-        icgc_project_codes = pd.DataFrame()
         try:
             icgc_project_codes = pd.read_csv(path_to_dcc_manifest,
                                              sep='\t',
@@ -219,8 +210,10 @@ class Helper:
             icgc_project_codes = icgc_project_codes['project_id/project_count'] \
                 .unique() \
                 .tolist()
-        except:
-            Log.logger.warning('ICGC DCC Manifest does not exist. Check path to manifest.')
+        except Exception as e:
+            Log.logger.warning(e)
+            Log.logger.warning('ICGC DCC Manifest could not be found. Check path to manifest.')
+            sys.exit(1)
 
         return icgc_project_codes
 
@@ -229,14 +222,16 @@ class Helper:
         """This method creates a unique list of SRA accessions, for which metadata has to be downloaded
 
         :param path_to_sra_acc_list: path to SRA Accession List
-        :return: list of unique SRA accesssions
+        :return: list of unique SRA accessions
         """
         try:
             sra_accessions = pd.read_csv(path_to_sra_acc_list, header=None)
             sra_accessions = sra_accessions[0].unique().tolist()
-        except:
+            return sra_accessions
+        except Exception as e:
+            Log.logger.warning(e)
             Log.logger.warning('SRA accession list does not exist. Check path to accession list.')
-        return sra_accessions
+            sys.exit(1)
 
     @staticmethod
     def get_gdc_filename_list(path_to_gdc_manifest):
@@ -248,9 +243,11 @@ class Helper:
         try:
             gdc_file_names = pd.read_csv(path_to_gdc_manifest, sep='\t', usecols=['filename'])
             gdc_file_names = gdc_file_names['filename'].unique().tolist()
-        except:
+            return gdc_file_names
+        except Exception as e:
+            Log.logger.warning(e)
             Log.logger.warning('GDC Manifest does not exist. Check path to manifest.')
-        return gdc_file_names
+            sys.exit(1)
 
 
 class Downloader:
@@ -342,7 +339,6 @@ class Downloader:
 
         missing = [file for file in gdc_file_name_list
                    if not any(downloaded in file for downloaded in downloaded_files)]
-        print(missing)
         if len(missing) > 0:
             Log.logger.info('Download Metadata from GDC')
             cases_endpt = 'https://api.gdc.cancer.gov/files'
@@ -476,7 +472,8 @@ class DataProcessor:
             gdc_meta_df = gdc_meta_df.rename(columns=ListDict.gdc_col_dict)
             gdc_meta_df['portal'] = 'GDC'
             return gdc_meta_df
-        except:
+        except Exception as e:
+            Log.logger.warning("No GDC data provided. Creating dummy. Exception: {}".format(e))
             gdc_meta_df = pd.DataFrame(columns=ListDict.gdc_col_dict)
             return gdc_meta_df
 
@@ -528,9 +525,8 @@ class DataProcessor:
                                      'submitted_specimen_id', 'percentage_cellularity', 'level_of_cellularity'],
                                  how='left')
 
-
-        except:
-            Log.logger.info('No ICGC DCC Manifest provided')
+        except Exception as e:
+            Log.logger.info('No ICGC DCC Data provided. Creating dummy. Exception: {}'.format(e))
             merge_rep_man = pd.DataFrame(columns=ListDict.rep_man_cols)
             donor_df = pd.DataFrame(columns=ListDict.donor_df_cols)
             sample_df = pd.DataFrame(columns=ListDict.sample_df_cols)
@@ -539,7 +535,7 @@ class DataProcessor:
 
     @staticmethod
     def stringtie_results_out(res_inpath):
-        """This method extracts information from nf-core/rnaseq's output
+        """This method extracts information from nf-core/rnaseq output
 
         :param res_inpath: Path to rna-seq results folder
         :return: returns list of DataFrames containing information from StringTie
@@ -617,7 +613,8 @@ class DataProcessor:
         """
         try:
             sra = sra_meta_df.rename(columns=ListDict.database_columns)
-        except:
+        except Exception as e:
+            Log.logger.warning("No SRA data provided. Creating dummy. Exception: {}".format(e))
             sra = pd.DataFrame(columns=ListDict.sra_df_cols)
         rep_man = icgc_meta_df[0].rename(columns=ListDict.database_columns)
         donor = icgc_meta_df[1].rename(columns=ListDict.database_columns)
@@ -660,7 +657,6 @@ class DataProcessor:
         :param db_dest: Path do directory where files for database should be stored
         :return:
         """
-        # TODO: CLEAN UP CODE
         merged_gene_counts = pd.read_csv(os.path.join(rnaseq, "results/featureCounts/merged_gene_counts.txt"),
                                          sep='\t')
 
@@ -764,6 +760,7 @@ class SQLscripts:
         script = script.replace("$PATH$", str(db_dest))
         with open('postgresql_scripts/populate_tables.sql', 'w') as file:
             file.write(script)
+
 
 if __name__ == "__main__":
     sys.exit(main())
