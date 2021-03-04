@@ -90,8 +90,6 @@ CREATE TABLE sample
     study_donor_involved_in             VARCHAR(30) NULL,
     consent                             VARCHAR(30) NULL,
     repository                          VARCHAR(30) NULL,
-    experiemntal_strategy               VARCHAR(30) NULL,
-    assembly_name                       VARCHAR(30) NULL,
     experiment                          VARCHAR(30) NULL,
     sample                              VARCHAR(30) NULL,
     sample_type                         VARCHAR(30) NULL,
@@ -99,9 +97,11 @@ CREATE TABLE sample
     source                              VARCHAR(30) NULL,
     disease                             VARCHAR(30) NULL,
     tumour                              VARCHAR(30) NULL,
+    affection_status                    VARCHAR(30) NULL,
     analyte_type                        VARCHAR(30) NULL,
     histological_type                   VARCHAR(30) NULL,
     center_name                         VARCHAR(30) NULL,
+    submission                          VARCHAR(30) NULL,
     portal                              VARCHAR(20) NOT NULL
 );
 

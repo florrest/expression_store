@@ -11,7 +11,7 @@ COPY gene (gene_id,gene_name,reference,strand,gene_version,
     DELIMITER ','
     CSV HEADER;
 
-COPY project(project_code,study,sra_study,project_id,study_pubmed_id,dbgap_study_accession)
+COPY project(project_code,study,sra_study,dbgap_study_accession)
     FROM '$PATH$/project.csv'
     DELIMITER ','
     CSV HEADER;
@@ -31,16 +31,14 @@ COPY donor(project_code,donor_id,submitted_donor_id,donor_sex,donor_vital_status
  Inserting into sample table, if data not already exists
 */
 
-COPY sample(run,sample_id,project_code,submitted_sample_id,icgc_specimen_id,submitted_specimen_id,donor_id,
-    submitted_donor_id,analyzed_sample_interval,percentage_cellularity,level_of_cellularity,study_specimen_involved_in,
-    specimen_type,specimen_type_other,specimen_interval,specimen_donor_treatment_type,
-    specimen_donor_treatment_type_other,specimen_processing,specimen_processing_other,specimen_storage,
-    specimen_storage_other,tumour_confirmed,specimen_biobank,specimen_biobank_id,specimen_available,
-    tumour_histological_type,tumour_grading_system,tumour_grade,tumour_grade_supplemental,
-    tumour_stage_system,tumour_stage,tumour_stage_supplemental,digital_image_of_stained_section,
-    study_donor_involved_in,consent,repository,experiemntal_strategy,assembly_name,experiment,project_id,sample,
-    sample_type,sample_name, source,disease,tumour,affection_status,analyte_type,histological_type,body_site,
-    center_name,submission)
+COPY sample(run,sample_id,project_code,submitted_sample_id,icgc_specimen_id,submitted_specimen_id,donor_id,body_site,
+            submitted_donor_id,study_specimen_involved_in,specimen_type,specimen_type_other,specimen_interval,
+            specimen_donor_treatment_type,specimen_donor_treatment_type_other,specimen_processing,
+            specimen_processing_other,specimen_storage,specimen_storage_other,tumour_confirmed,
+            specimen_biobank,specimen_biobank_id,specimen_available,tumour_histological_type,tumour_grading_system,
+            tumour_grade,tumour_grade_supplemental,tumour_stage_system,tumour_stage,tumour_stage_supplemental,
+            study_donor_involved_in,consent,repository,experiment,sample,sample_type,sample_name,source,disease,
+            tumour,affection_status,analyte_type,histological_type,center_name,submission,portal)
     FROM '$PATH$/sample.csv'
     DELIMITER ','
     CSV HEADER;
@@ -49,7 +47,7 @@ COPY sample(run,sample_id,project_code,submitted_sample_id,icgc_specimen_id,subm
  Inserting into expression table, if data not already exists
 */
 
-COPY expression(sample_id,gene_id,fpkm,tpm,coverage,raw_count)
+COPY expression(run,gene_id,fpkm,tpm,coverage,raw_count)
     FROM '$PATH$/expression.csv'
     DELIMITER ','
     CSV HEADER;
@@ -77,12 +75,12 @@ COPY pipeline(nf_core_rnaseq,Nextflow,FastQC,Cutadapt,Trim_Galore,SortMeRNA,STAR
 
 
 INSERT INTO sample_has_expression(run)
-SELECT DISTINCT e.sample_id
+SELECT DISTINCT e.run
 FROM expression e;
 
 UPDATE expression
 SET run_id = she.run_id FROM sample_has_expression she
-WHERE she.run = expression.sample_id;
+WHERE she.run = expression.run;
 
 
 UPDATE sample

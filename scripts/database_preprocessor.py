@@ -673,7 +673,7 @@ class DataProcessor:
                                                 0: 'raw_count'})
         raw_counts['run'] = raw_counts['run'].map(lambda x: re.sub(r"-R1", "", x))
         raw_counts['run'] = raw_counts['run'].map(lambda x: re.sub(r"-R2", "", x))
-
+        raw_counts['raw_count'] = raw_counts['raw_count'].astype(int)
         merged_gene_counts_series = merged_gene_counts.drop(
             ['Geneid', 'gene_name'], axis=1)
         sum_gene_counts = merged_gene_counts_series.sum(axis=0)
