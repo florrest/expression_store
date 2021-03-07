@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import re
+import resource
 import shutil
 import subprocess
 import sys
@@ -38,6 +39,7 @@ def main():
     """ This is the main class, which performs all necessary steps to successfully download, process and export metadata
     and data for the database
     """
+
     args = parser.parse_args()
     rnaseq = args.rnaseq
     sra_file = args.sra_file
@@ -91,6 +93,7 @@ def main():
 
     SQLscripts.prepare_populate_script(db_dest)
 
+    Log.logger.info("Peak memory usage was: {} GB".format(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024 ** 2))
 
 class Log:
     logger = logging.getLogger('Expression Store Script Logger')
@@ -224,15 +227,15 @@ class Helper:
         :param path_to_sra_acc_list: path to SRA Accession List
         :return: list of unique SRA accessions
         """
+        sra_accessions = pd.DataFrame()
         try:
             sra_accessions = pd.read_csv(path_to_sra_acc_list, header=None)
             sra_accessions = sra_accessions[0].unique().tolist()
-            return sra_accessions
+
         except Exception as e:
             Log.logger.warning(e)
             Log.logger.warning('SRA accession list does not exist. Check path to accession list.')
-            sys.exit(1)
-
+        return sra_accessions
     @staticmethod
     def get_gdc_filename_list(path_to_gdc_manifest):
         """This method creates a list of GDC files, for which metadata has to be downloaded

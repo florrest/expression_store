@@ -4,7 +4,7 @@
 /*
  Inserting into expression table, if data not already exists
 */
-
+\timing
 COPY gene (gene_id,gene_name,reference,strand,gene_version,
     gene_biotype,hgnc_id,symbol,locus_group,locus_type,gene_family)
     FROM '$PATH$/gene.csv'
@@ -72,8 +72,6 @@ COPY pipeline(nf_core_rnaseq,Nextflow,FastQC,Cutadapt,Trim_Galore,SortMeRNA,STAR
     DELIMITER ','
     CSV HEADER;
 
-
-
 INSERT INTO sample_has_expression(run)
 SELECT DISTINCT e.run
 FROM expression e;
@@ -82,6 +80,9 @@ UPDATE expression
 SET run_id = she.run_id FROM sample_has_expression she
 WHERE she.run = expression.run;
 
+UPDATE expression
+SET gene_index_id = g.gene_index_id FROM gene g
+WHERE expression.gene_id = g.gene_id;
 
 UPDATE sample
 SET run_id = she.run_id FROM sample_has_expression she
@@ -90,5 +91,12 @@ WHERE she.run = sample.run;
 UPDATE countinfo
 SET run_id = she.run_id FROM sample_has_expression she
 WHERE she.run = countinfo.run;
+
+UPDATE countinfo
+SET run_id = she.run_id FROM sample_has_expression she
+WHERE she.run = countinfo.run;
+
+ALTER TABLE expression
+    ADD PRIMARY KEY (run_id, gene_index_id);
 
 

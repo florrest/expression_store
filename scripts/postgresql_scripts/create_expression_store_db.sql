@@ -120,7 +120,7 @@ CREATE TABLE expression
 CREATE TABLE gene
 (
     gene_index_id SERIAL,
-    gene_id       VARCHAR(24),
+    gene_id       VARCHAR(25),
     gene_name     VARCHAR(24),
     reference     VARCHAR(100),
     strand        VARCHAR(100),
