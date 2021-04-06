@@ -1,7 +1,6 @@
 [
   "project_code",
   "donor_id",
-  "submitted_donor_id",
   "donor_sex",
   "donor_vital_status",
   "disease_status_last_followup",

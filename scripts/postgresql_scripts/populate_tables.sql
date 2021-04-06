@@ -35,14 +35,14 @@ CREATE TABLE tmp_pipeline (LIKE pipeline INCLUDING ALL);
 */
 COPY tmp_gene (gene_id,gene_name,reference,strand,gene_version,
     gene_biotype,hgnc_id,symbol,locus_group,locus_type,gene_family)
-    FROM '$PATH$/gene.csv'
+    FROM '/home/flo/Schreibtisch/test_folder/gene.csv'
     DELIMITER ','
     CSV HEADER;
 /*
  Inserting into PROJECT table, if data not already exists
 */
 COPY tmp_project(project_code,study,sra_study,dbgap_study_accession)
-    FROM '$PATH$/project.csv'
+    FROM '/home/flo/Schreibtisch/test_folder/project.csv'
     DELIMITER ','
     CSV HEADER;
 /*
@@ -53,7 +53,7 @@ COPY tmp_donor(project_code,donor_id,donor_sex,donor_vital_status,disease_status
            donor_diagnosis_icd10,donor_tumour_staging_system_at_diagnosis,donor_tumour_stage_at_diagnosis,
            donor_tumour_stage_at_diagnosis_supplemental,donor_survival_time,donor_interval_of_last_followup,
            prior_malignancy,cancer_type_prior_malignancy,cancer_history_first_degree_relative)
-    FROM '$PATH$/donor.csv'
+    FROM '/home/flo/Schreibtisch/test_folder/donor.csv'
     DELIMITER ','
     CSV HEADER;
 
@@ -66,7 +66,7 @@ COPY tmp_sample(run,sample_id,project_code,icgc_specimen_id,donor_id,body_site,s
             tumour_grading_system,tumour_grade,tumour_grade_supplemental,tumour_stage_system,tumour_stage,
             tumour_stage_supplemental,consent,repository,sra_experiment,sra_sample,sample_type,sample_name,source,
             disease,center_name,sra_submission,portal)
-    FROM '$PATH$/sample.csv'
+    FROM '/home/flo/Schreibtisch/test_folder/sample.csv'
     DELIMITER ','
     CSV HEADER;
 
@@ -75,7 +75,7 @@ COPY tmp_sample(run,sample_id,project_code,icgc_specimen_id,donor_id,body_site,s
 */
 
 COPY tmp_expression(run,gene_id,fpkm,tpm,coverage,raw_count)
-    FROM '$PATH$/expression.csv'
+    FROM '/home/flo/Schreibtisch/test_folder/expression.csv'
     DELIMITER ','
     CSV HEADER;
 
@@ -85,7 +85,7 @@ COPY tmp_expression(run,gene_id,fpkm,tpm,coverage,raw_count)
 */
 
 COPY tmp_countinfo(run,sum_counts,library_name,library_strategy,library_selection,library_source,library_layout)
-    FROM '$PATH$/countinfo.csv'
+    FROM '/home/flo/Schreibtisch/test_folder/countinfo.csv'
     DELIMITER ','
     CSV HEADER;
 
@@ -95,7 +95,7 @@ COPY tmp_countinfo(run,sum_counts,library_name,library_strategy,library_selectio
 
 COPY tmp_pipeline(nf_core_rnaseq,Nextflow,FastQC,Cutadapt,Trim_Galore,SortMeRNA,STAR,HISAT2,Picard_MarkDuplicates,
     Samtools,featureCounts,Salmon,StringTie,Preseq,deepTools,RSeQC,dupRadar,edgeR,Qualimap,MultiQC)
-    FROM '$PATH$/pipeline.csv'
+    FROM '/home/flo/Schreibtisch/test_folder/pipeline.csv'
     DELIMITER ','
     CSV HEADER;
 

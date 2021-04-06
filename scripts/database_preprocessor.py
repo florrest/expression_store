@@ -69,30 +69,35 @@ def main():
     Downloader.download_hgnc(metadata_dest)
 
     Log.logger.info("Creating ProjectLayer csv files")
+    start_project_layer = time.time()
     project_db = DataProcessor.create_project_layer_tables(
         DataProcessor.concat_sra_meta(os.path.join(metadata_dest, "sra"), Helper.get_sra_accession_list(sra_file)),
         DataProcessor.concat_icgc_meta(metadata_dest, dcc_manifest),
         DataProcessor.concat_gdc_meta(os.path.join(metadata_dest, 'gdc/')),
         db_dest)
+    end_project_layer = time.time() - start_project_layer
+    Log.logger.info("Creating ProjectLayer took {} seconds".format(time.time() - start_project_layer))
 
     Log.logger.info("Creating ExpressionLayer csv files")
     raw_count_df = DataProcessor.create_countinfo_raw_count_table(project_db[3], rnaseq, db_dest)
 
+    Log.logger.info("Starting to create expression table. This might take a while.")
+    start = time.time()
     expression_df = dd.concat(DataProcessor.stringtie_results_out(os.path.join(rnaseq, 'results/stringtieFPKM/')))
-
+    DataProcessor.create_expression_table(expression_df,
+                                          raw_count_df,
+                                          db_dest)
+    Log.logger.info("Expression table created in {} seconds".format(time.time() - start))
     DataProcessor.create_gene_table(DataProcessor.process_ensembl_metadata(metadata_dest),
                                     DataProcessor.process_hgnc_metadata(metadata_dest),
                                     expression_df,
                                     db_dest)
 
-    DataProcessor.create_expression_table(expression_df,
-                                          raw_count_df,
-                                          db_dest)
-
     DataProcessor.create_pipeline_table(rnaseq, db_dest)
 
     SQLscripts.prepare_populate_script(db_dest)
 
+    Log.logger.info("project layer {} -- ".format(end_project_layer))
     Log.logger.info("Peak memory usage was: {} GB".format(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024 ** 2))
 
 class Log:
@@ -594,14 +599,13 @@ class DataProcessor:
         :return:
         """
         # expression = expression_df.drop(['reference', 'strand'], axis=1)
-        Log.logger.info("Starting to create expression table. This might take a while.")
-        start = time.time()
+
         expression = expression_df[['run', 'gene_id', 'fpkm',
                                     'tpm', 'coverage']]
         expression = expression.groupby(['run', 'gene_id']).sum().reset_index()
 
         expression = expression.merge(raw_count_df, on=['gene_id', 'run'], how='left')
-        Log.logger.info("Expression table created in {} seconds".format(time.time() - start))
+
         Helper.create_csv_from_dask(expression, "expression", db_dest)
 
     @staticmethod
